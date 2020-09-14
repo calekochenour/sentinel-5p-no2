@@ -50,7 +50,10 @@ def create_session(config_file):
             user = client.user().get()
 
         print(
-            f"Authenticated to Box API with user {user.name} and created a client session."
+            (
+                f"Authenticated to Box API with user {user.name} and created a"
+                "client session."
+            )
         )
 
     else:
@@ -139,14 +142,16 @@ def display_specific_folder(client_session, root_folder, target_folder_name):
                 print(
                     (
                         f"Folder: {box_folder_parent.parent.name}\\"
-                        f"{box_folder.parent.name}\\{folder.name}, ID: {folder.id}"
+                        f"{box_folder.parent.name}\\{folder.name}, "
+                        "ID: {folder.id}"
                     )
                 )
 
-            except AttributeError as error:
+            except AttributeError:
                 print(
                     (
-                        f"Folder: {box_folder.parent.name}\\{folder.name}, ID: {folder.id}"
+                        f"Folder: {box_folder.parent.name}\\{folder.name}, "
+                        "ID: {folder.id}"
                     )
                 )
 
@@ -197,7 +202,7 @@ def upload_files_to_box(box_folder, local_folder, file_extension=None):
     # Upload each file to Box
     for file in files:
         try:
-            upload = box_folder.upload(file_path=file)
+            box_folder.upload(file_path=file)
         except Exception as error:
             print(f"Failed to upload {os.path.basename(file)}")
             print(error)
