@@ -50,6 +50,7 @@ def create_session(config_file):
             user = client.user().get()
 
         print(
+
             f"Authenticated to Box API with user {user.name} and created a client session."
         )
 
