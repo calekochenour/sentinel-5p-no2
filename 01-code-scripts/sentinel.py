@@ -13,7 +13,9 @@ from harp._harppy import NoDataError
 import radiance as rd
 
 
-def create_resample_operations(bounding_box, cell_size=0.025, quality_value=50):
+def create_resample_operations(
+    bounding_box, cell_size=0.025, quality_value=50
+):
     """Returns a string that is formatted to
     work with the harp.import_product() function.
 
@@ -62,8 +64,12 @@ def create_resample_operations(bounding_box, cell_size=0.025, quality_value=50):
          derive(longitude {longitude})'
     """
     # Compute number of lat/lon grid cells in each column/row
-    num_latitude_cells = int((bounding_box[3] - bounding_box[1]) / cell_size + 1)
-    num_longitude_cells = int((bounding_box[2] - bounding_box[0]) / cell_size + 1)
+    num_latitude_cells = int(
+        (bounding_box[3] - bounding_box[1]) / cell_size + 1
+    )
+    num_longitude_cells = int(
+        (bounding_box[2] - bounding_box[0]) / cell_size + 1
+    )
 
     # Define operations
     operations = (
@@ -75,7 +81,8 @@ def create_resample_operations(bounding_box, cell_size=0.025, quality_value=50):
         f"longitude > {bounding_box[0]} [degree_east]; "
         f"longitude < {bounding_box[2]} [degree_east]; "
         # Re-sample grid
-        f"bin_spatial({num_latitude_cells}, {bounding_box[1]}, {cell_size}, {num_longitude_cells}, {bounding_box[0]}, {cell_size}); "
+        f"bin_spatial({num_latitude_cells}, {bounding_box[1]}, {cell_size}, "
+        f"{num_longitude_cells}, {bounding_box[0]}, {cell_size}); "
         # Derive pixel centers for re-sampled grid
         "derive(latitude {latitude}); "
         "derive(longitude {longitude})"
@@ -86,8 +93,7 @@ def create_resample_operations(bounding_box, cell_size=0.025, quality_value=50):
 
 
 def remove_trailing(operations_string):
-    """Removes unnecessary characters from an import operations string.
-    """
+    """Removes unnecessary characters from an import operations string."""
     # Remove characters
     if operations_string[-1] == ";":
         operations = operations_string[:-1]
@@ -132,8 +138,8 @@ def create_import_operations(
         '<=' (less than or equal to, data <= 5)
         '>=' (greater than or equal to, data >= 5)
         '>'  (greater than, data > 5)
-        '=&' (bitfield operator, data =& 5, True if both bits 1 and 3 in data are set)
-        '!&' (bitfield operator, data !& 5, True if neither bits 1 and 3 in data are set)
+        '=&' (bitfield, data =& 5, True if both bits 1 and 3 in data are set)
+        '!&' (bitfield, data !& 5, True if neither bits 1 or 3 in data are set)
 
     quality_threshold : int or float
         Threshold value to filter the data on.
@@ -166,7 +172,9 @@ def create_import_operations(
     """
     # Define quality component
     if quality_variable and quality_comparison and quality_threshold:
-        quality_str = f"{quality_variable} {quality_comparison} {quality_threshold}; "
+        quality_str = (
+            f"{quality_variable} {quality_comparison} {quality_threshold}; "
+        )
     else:
         quality_str = None
 
@@ -176,11 +184,17 @@ def create_import_operations(
         lat_max_str = f"latitude < {bounding_box[3]} [degree_north]; "
         lon_min_str = f"longitude > {bounding_box[0]} [degree_east]; "
         lon_max_str = f"longitude < {bounding_box[2]} [degree_east]; "
-        geographic_bounds_str = lat_min_str + lat_max_str + lon_min_str + lon_max_str
+        geographic_bounds_str = (
+            lat_min_str + lat_max_str + lon_min_str + lon_max_str
+        )
 
         # Compute number of lat/lon grid cells in each column/row
-        num_latitude_cells = int((bounding_box[3] - bounding_box[1]) / cell_size + 1)
-        num_longitude_cells = int((bounding_box[2] - bounding_box[0]) / cell_size + 1)
+        num_latitude_cells = int(
+            (bounding_box[3] - bounding_box[1]) / cell_size + 1
+        )
+        num_longitude_cells = int(
+            (bounding_box[2] - bounding_box[0]) / cell_size + 1
+        )
 
         # Deifine parameters for bin_spatial() function
         bin_spatial_params = map(
@@ -204,7 +218,9 @@ def create_import_operations(
 
     # Define derive variables component
     if derive_variables:
-        derive_str = "".join([f"derive({variable}); " for variable in derive_variables])
+        derive_str = "".join(
+            [f"derive({variable}); " for variable in derive_variables]
+        )
     else:
         derive_str = None
 
@@ -230,7 +246,9 @@ def create_import_operations(
 
     # Remove unnecessary trailing characters
     operations = (
-        remove_trailing(operations_string) if operations_string else operations_string
+        remove_trailing(operations_string)
+        if operations_string
+        else operations_string
     )
 
     # Return operations
@@ -260,9 +278,9 @@ def extract_acquisition_time(netcdf4_path):
     """
     # Extract acquisition start time
     with Dataset(netcdf4_path, "r") as netcdf4:
-        acquisition_time = netcdf4.groups["PRODUCT"]["time_utc"][0][0][:19].replace(
-            ":", ""
-        )
+        acquisition_time = netcdf4.groups["PRODUCT"]["time_utc"][0][0][
+            :19
+        ].replace(":", "")
 
     # Separate y/m/d from time and add indicator of Zulu time
     acquisition_time = f"{acquisition_time[:10]}-{acquisition_time[10:]}Z"
@@ -272,7 +290,11 @@ def extract_acquisition_time(netcdf4_path):
 
 
 def resample_netcdf4(
-    netcdf4_path, resample_operations, export_folder, file_prefix, acquisition_time,
+    netcdf4_path,
+    resample_operations,
+    export_folder,
+    file_prefix,
+    acquisition_time,
 ):
     """Resamples a Sentinel-5P netCDF4 file to a
     spatially-uniform grid cell size and exports
@@ -315,13 +337,15 @@ def resample_netcdf4(
     resampled_data = harp.import_product(netcdf4_path, resample_operations)
 
     # Define export path
-    export_path = os.path.join(export_folder, f"{file_prefix}-{acquisition_time}.nc")
+    export_path = os.path.join(
+        export_folder, f"{file_prefix}-{acquisition_time}.nc"
+    )
 
     try:
         # Export re-sampled harp product to netCDF
         harp.export_product(resampled_data, export_path, file_format="netcdf")
 
-    except:
+    except Exception:
         # Define failure message
         out_message = "Failed to export."
 
@@ -455,7 +479,9 @@ def store_no2_data(no2_data, no2_dict, acquisition_time):
 
     else:
         # Define output message
-        message = f"{acquisition_time} index already in dictionary. Skipping..."
+        message = (
+            f"{acquisition_time} index already in dictionary. Skipping..."
+        )
 
     # Return message
     return message
@@ -494,10 +520,14 @@ def extract_no2_transform(netcdf_path):
     # Open .nc file as netCDF Dataset
     with Dataset(netcdf_path, "r") as netcdf_resampled:
 
-        # Get longitude pixel bounds lower-left, lower-right, upper-right, upper-left)
-        longitude_bounds = netcdf_resampled.variables.get("longitude_bounds")[:]
+        # Get longitude pixel bounds
+        # Lower-left, lower-right, upper-right, upper-left
+        longitude_bounds = netcdf_resampled.variables.get("longitude_bounds")[
+            :
+        ]
 
-        # Get longitude pixel bounds lower-left, lower-right, upper-right, upper-left)
+        # Get longitude pixel bounds
+        # Lower-left, lower-right, upper-right, upper-left
         latitude_bounds = netcdf_resampled.variables.get("latitude_bounds")[:]
 
         # Get top-left corner of image
@@ -505,10 +535,13 @@ def extract_no2_transform(netcdf_path):
         latitude_max = latitude_bounds.max()
 
         # Define cell spacing (degrees)
-        column_spacing = round(longitude_bounds[0][-1] - longitude_bounds[0][0], 6)
+        column_spacing = round(
+            longitude_bounds[0][-1] - longitude_bounds[0][0], 6
+        )
         row_spacing = round(latitude_bounds[0][-1] - latitude_bounds[0][0], 6)
 
-        # Define transform (top-left corner: west, north, and pixel size: xsize, ysize)
+        # Define transform
+        # Top-left corner: west, north, and pixel size: xsize, ysize
         transform = from_origin(
             longitude_min, latitude_max, column_spacing, row_spacing
         )
@@ -594,7 +627,9 @@ def extract_arrays_to_list(no2, dates):
     return array_list
 
 
-def store_continuous_range_statistic(no2_daily, date_range_list, statistic="mean"):
+def store_continuous_range_statistic(
+    no2_daily, date_range_list, statistic="mean"
+):
     """Calculates the specified statistic for each entry
     (year/month/day) in a list of and stores the statistics
     values in a dictionary.
@@ -651,7 +686,10 @@ def store_continuous_range_statistic(no2_daily, date_range_list, statistic="mean
     for date_range in date_ranges:
 
         # Create index based on date range
-        date_key = f"{date_range[0].replace('-', '')}-{date_range[-1].replace('-', '')}"
+        date_key = (
+            f"{date_range[0].replace('-', '')}"
+            f"-{date_range[-1].replace('-', '')}"
+        )
 
         # Get arrays for all dates into list
         no2_arrays = extract_arrays_to_list(no2=no2_daily, dates=date_range)
@@ -661,19 +699,25 @@ def store_continuous_range_statistic(no2_daily, date_range_list, statistic="mean
         if statistic == "mean":
 
             # Get mean for each pixel, over all arrays (bands)
-            no2_statistic = rd.calculate_statistic(no2_arrays, statistic="mean")
+            no2_statistic = rd.calculate_statistic(
+                no2_arrays, statistic="mean"
+            )
 
         # Variance
         elif statistic == "variance":
 
             # Get variance for each pixel, over all arrays (bands)
-            no2_statistic = rd.calculate_statistic(no2_arrays, statistic="variance")
+            no2_statistic = rd.calculate_statistic(
+                no2_arrays, statistic="variance"
+            )
 
         # Standard deviation
         elif statistic == "deviation":
 
             # Get standard deviation for each pixel, over all arrays (bands)
-            no2_statistic = rd.calculate_statistic(no2_arrays, statistic="deviation")
+            no2_statistic = rd.calculate_statistic(
+                no2_arrays, statistic="deviation"
+            )
 
         # Any other value
         else:
