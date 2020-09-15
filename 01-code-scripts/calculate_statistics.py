@@ -62,7 +62,7 @@ for stat_name, stat_array in statistics.items():
                 "03-processed-data",
                 "raster",
                 "south-korea",
-                "no2-statistics",
+                "statistics",
                 f"{stat_name}-MOL-PER-M2.tif",
             ),
             metadata=metadata,

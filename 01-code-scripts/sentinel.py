@@ -735,7 +735,11 @@ def store_continuous_range_statistic(
 
 
 def convert_level2_to_level3(
-    level2_folder, import_operations, level3_folder, level3_prefix
+    level2_folder,
+    import_operations,
+    level3_netcdf_folder,
+    level3_geotiff_folder,
+    level3_prefix,
 ):
     """Converts Sentinel-5P Level-2 netCDF files to Level-3
     netCDF and GeoTiff files.
@@ -754,7 +758,7 @@ def convert_level2_to_level3(
             level3_path = resample_netcdf4(
                 level2_file,
                 operations,
-                export_folder=level3_folder,
+                export_folder=level3_netcdf_folder,
                 file_prefix=level3_prefix,
                 acquisition_time=acquisition_time,
             )
@@ -778,7 +782,8 @@ def convert_level2_to_level3(
 
             # Define outpath
             output_path = os.path.join(
-                level3_folder, f"{level3_prefix}-{acquisition_time}.tif"
+                level3_geotiff_folder,
+                f"{level3_prefix}-{acquisition_time}.tif",
             )
 
             # Export array to GeoTiff
