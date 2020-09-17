@@ -4,21 +4,21 @@ Run this file in the folder where the data should be downloaded to
 
 Available Product Types:
 Product                   Data file descriptor
-UV Aerosol Index	      AER_AI
-Aerosol Layer Height	  AER_LH
-Carbon Monoxide (CO)	  CO____
-Cloud	                  CLOUD_
-Formaldehyde (HCHO)	      HCHO__
-Methane (CH4)	          CH4___
+UV Aerosol Index          AER_AI
+Aerosol Layer Height      AER_LH
+Carbon Monoxide (CO)      CO____
+Cloud                     CLOUD_
+Formaldehyde (HCHO)       HCHO__
+Methane (CH4)             CH4___
 Nitrogen Dioxide (NO2)    NO2___
 Sulphur Dioxide (SO2)     SO2___
 Ozone (O3)                O3____
-Tropospheric Ozone 	      O3_TCL
+Tropospheric Ozone        O3_TCL
 
 Additional product information here:
     http://www.tropomi.eu/data-products/level-2-products
 
-Note: Credentials for downloading data (lines 36, 68-69) have been replaced
+Note: Credentials for downloading data (lines 36, 75-76) have been replaced
       with '########'.
 
 """
@@ -44,6 +44,15 @@ def execute_query():
     return print("Completed query.")
 
 
+def load_json(json_file):
+    """Loads a JSON file."""
+    # Load JSON
+    with open(json_file) as file:
+        loaded_json = json.load(file)
+
+    return loaded_json
+
+
 def write_to_csv():
     """Writes the file download links to a CSV file."""
     # Write UUID links to CSV file
@@ -52,7 +61,7 @@ def write_to_csv():
         "w",
         newline="",
     ) as file:
-        csv.writer(file).writerows(uuid_links)
+        csv.writer(file).writerows(links_uuids)
 
     return print("Completed write to CSV.")
 
@@ -108,7 +117,6 @@ def delete_files(file_extension):
 # lon_max = 130.7
 # lat_min = 37.6
 # lat_max = 43.1
-
 
 # North and South Korea
 lon_min = 124.1
@@ -171,56 +179,47 @@ escape_char = "\\"
 # Execute first query (create JSON file with query results)
 execute_query()
 
-# Create list for file UUID links
-uuid_links = []
-
 # Open JSON
-with open(query_results_file) as file:
-    query_results = json.load(file)
+query_results = load_json(query_results_file)
 
 # Get number of results from query (number of files to download)
 num_total_results = int(query_results["feed"]["opensearch:totalResults"])
 
-# Run until all JSON entries have been processed
+# Initialize list for file links and UUIDs
+links_uuids = []
+
+# Process JSON entries - run until all JSON entries have been processed
 while num_processed_results < num_total_results:
-    # Get the number of JSON entries (for download)
-    num_entries = len(query_results["feed"]["entry"])
     # Loop through each JSON entry
-    for entry in range(0, num_entries):
-        # Extract file title
-        file_title = query_results["feed"]["entry"][entry]["title"]
-        # Check if the file contains NO2 data
-        if "NO2___" in file_title:
-            # Extract file link and UUID
-            file_link = query_results["feed"]["entry"][entry]["link"][0]
-            file_uuid = file_link["href"].split("'")[1]
-            # Append file link and UUID to list
-            uuid_links.append([file_link, file_uuid])
-            # Increment number of processed results
+    for entry in range(0, len(query_results["feed"]["entry"])):
+        # Check if the file contains NO2 data (from file title)
+        if "NO2___" in query_results["feed"]["entry"][entry]["title"]:
+            # Append file link and UUID to list and increment number processed
+            links_uuids.append(
+                [
+                    query_results["feed"]["entry"][entry]["link"][0],
+                    query_results["feed"]["entry"][entry]["link"][0][
+                        "href"
+                    ].split("'")[1],
+                ]
+            )
             num_processed_results += 1
-    # Multiple pages of results - still more files/links to process after
-    #  encountering the maximum allowable per response
-    # Run if the number of query results (total) exceeds the number processed
-    #  (maximum is likely 200 processed, total could be greater)
+    # Multiple pages of results - run if the number of query results
+    #  exceeds the number processed
     if num_processed_results < num_total_results:
-        # Increment request number
+        # Increment request number, update JSON file name, execute new query
         request_number += 1
-        # Update name of JSON file with new request number
         query_results_file = (
             f"query_results_{product_type}_{date_range}_{request_number}.json"
         )
-        # Execute another query (create JSON file)
         execute_query()
-
-        # Open JSON
-        with open(query_results_file) as file:
-            query_results = json.load(file)
+        query_results = load_json(query_results_file)
 
 # Write query results to CSV
 write_to_csv()
 
 # Download files from links
-download_files(uuid_links)
+download_files(links_uuids)
 
 # Delete CSV and JSON created during acquisition
 for extension in ["json", "csv"]:
