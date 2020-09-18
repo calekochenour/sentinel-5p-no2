@@ -311,7 +311,7 @@ def resample_netcdf4(
 
     export_folder : str
         Folder (exluding filename) for the
-        exported netCDF3 file.
+        exported netCDF4 file.
 
     acquisition_time : str
         Acquisition time of the data, for use
