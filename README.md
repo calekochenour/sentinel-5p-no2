@@ -30,7 +30,7 @@ To run the Python and Jupyter Notebook files in the `01-code-scripts/` folder, y
 
 ## Local Setup Instructions
 
-The instructions expect you have a local copy of this GitHub repository.
+The instructions expect you to have a local copy of this GitHub repository.
 
 ### Create and Activate Conda Environment
 
