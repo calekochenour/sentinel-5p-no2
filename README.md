@@ -20,11 +20,11 @@ Contains all created/processed data.
 
 ### `environment.yml`
 
-Contains all information to create the Conda environment required to run the Python and Jupyter Notebook files in the `01-code-scripts` folder.  
+Contains all information to create the Conda environment required to run the Python and Jupyter Notebook files in the `01-code-scripts/` folder.  
 
 ## Prerequisites
 
-To run the Python and Jupyter Notebook files in the `01-code-scripts` folder, you will need:
+To run the Python and Jupyter Notebook files in the `01-code-scripts/` folder, you will need:
 
  * Conda ([Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://docs.anaconda.com/anaconda/install/))
 
@@ -39,21 +39,21 @@ From the terminal, you can create and activate the Conda environment.
 Create environment:
 
 ```bash
-conda env create -f environment.yml
+$ conda env create -f environment.yml
 ```
 
 Activate environment:
 
 ```bash
-conda activate sentinel-5p
+$ conda activate sentinel-5p
 ```
 
 ### Open Jupyter Notebook
 
-Once you activate the Conda environment, you can work with Jupyter Notebook files.
+Once you activate the Conda environment, you can work with the Jupyter Notebook files.
 
 Open Jupyter Notebook:
 
 ```bash
-jupyter notebook
+$ jupyter notebook
 ```
