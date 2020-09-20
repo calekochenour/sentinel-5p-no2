@@ -1,5 +1,6 @@
 """ Module containing functions that require the ArcPy site package """
 
+import csv
 import arcpy
 
 
@@ -51,7 +52,68 @@ def get_shapefile_crs(shapefile_path):
         >>> get_shapefile_crs("vermont_boundary.shp")
         ('NAD83_Vermont', 'Meter')
     """
-    # Extract spatial reference
+    # Get spatial reference object
     spatial_reference = arcpy.Describe(shapefile_path).spatialReference
 
-    return (spatial_reference.name, spatial_reference.linearUnitName)
+    # Extract CRS name and units
+    crs_name = spatial_reference.name
+    crs_units = (
+        spatial_reference.linearUnitName
+        if spatial_reference.linearUnitName
+        else "Degrees"
+    )
+
+    return (crs_name, crs_units)
+
+
+def get_country_name(shapefile):
+    """Extracts the country name from a shapefile.
+
+    Expects the file name to match "gadm36_NAME_NAME.shp".
+
+    Parameters
+    ----------
+    shapefile : str
+        File to extract the country name from.
+
+    Returns
+    -------
+    country_name : str
+        Name of the country, extracted from the original shapefile name.
+
+    Example
+    -------
+        >>> # Get country name
+        >>> get_country_name("gadm36_south_korea.shp")
+        'South Korea'
+    """
+    # Extract country name
+    country_name = " ".join(
+        [word.capitalize() for word in shapefile[7:].split("_")]
+    )
+
+    return country_name
+
+
+# Create list of shapefile names (without .shp if run in ArcGIS project)
+country_shapefiles = ["gadm36_singapore", "gadm36_south_korea"]
+
+# Create list of names and exents (for saving to CSV)
+country_extents = [
+    [get_country_name(shapefile), get_shapefile_extent(shapefile)]
+    for shapefile in country_shapefiles
+]
+
+# Write country extents to CSV file
+with open("country-extents.csv", mode="w", newline="") as csv_file:
+    csv_writer = csv.writer(
+        csv_file, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+    )
+    csv_writer.writerow(["Country", "Extent"])
+    csv_writer.writerows(country_extents)
+
+# Read CSV to check if the data are in order
+with open("country-extents.csv", newline="") as csv_file:
+    csv_reader = csv.reader(csv_file, delimiter=",", quotechar='"')
+    for row in csv_reader:
+        print(", ".join(row))
