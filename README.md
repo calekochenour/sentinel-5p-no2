@@ -1,2 +1,59 @@
-# sentinel-5p-no2
+# Sentinel-5P NO2
+
 Python scripts and Jupyter Notebooks for downloading and pre-processing Sentinel-5P NO2 data.
+
+## Contents
+
+The project contains folders for all stages of the project workflow as well as other files necessary to run the code.
+
+### `01-code-scripts/`
+
+Contains all Python and Jupyter Notebook files.
+
+### `02-raw-data/`
+
+Contains all original/unprocessed data.
+
+### `03-processed-data/`
+
+Contains all created/processed data.
+
+### `environment.yml`
+
+Contains all information to create the Conda environment required to run the Python and Jupyter Notebook files in the `01-code-scripts` folder.  
+
+## Prerequisites
+
+To run the Python and Jupyter Notebook files in the `01-code-scripts` folder, you will need:
+
+ * Conda ([Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://docs.anaconda.com/anaconda/install/))
+
+## Local Setup Instructions
+
+The instructions expect you have a local copy of this GitHub repository.
+
+### Create and Activate Conda Environment
+
+From the terminal, you can create and activate the Conda environment.
+
+Create environment:
+
+```bash
+conda env create -f environment.yml
+```
+
+Activate environment:
+
+```bash
+conda activate sentinel-5p
+```
+
+### Open Jupyter Notebook
+
+Once you activate the Conda environment, you can work with Jupyter Notebook files.
+
+Open Jupyter Notebook:
+
+```bash
+jupyter notebook
+```
