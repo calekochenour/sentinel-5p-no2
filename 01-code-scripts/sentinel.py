@@ -4,12 +4,18 @@ import os
 import re
 import glob
 from netCDF4 import Dataset
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.ma as ma
 from pandas.io.json import json_normalize
+from shapely.geometry import Polygon
+import geopandas as gpd
+import rasterio as rio
+from rasterio.plot import plotting_extent
 from rasterio.transform import from_origin
 import harp
 from harp._harppy import NoDataError
+import earthpy.plot as ep
 import radiance as rd
 
 
@@ -823,3 +829,746 @@ def store_level3_data(level3_folder):
 
     # Return dictionary
     return data_dict
+
+
+def plot_change(
+    pre_change,
+    post_change,
+    location="South Korea",
+    title="NO2",
+    data_source="European Space Agency",
+):
+    """Plots two arrays and the difference
+    between the arrays on the same figure.
+
+    pre_change : numpy array
+        Numpy array containing radiance values.
+
+    post_change : numpy array
+        Numpy array containing radiance values.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'Penn State Campus'.
+
+    titles : list of str, optional
+        Plot sub-titles. Default value is ['Radiance',
+        'Radiance', 'Radiance']. Intended for ['September
+        2019 Mean Radiance', 'March 2020 Mean Radiance',
+       'Change in Mean Radiance (September 2019 vs. March
+       2020)'].
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'NASA Black Marble'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot objects
+            The axes objects associated with the histogram.
+
+    Example
+    -------
+        >>> # Define titles
+        >>> plot_titles = [
+        ...     'September 2019 Mean Radiance',
+        ...     'March 2020 Mean Radiance',
+        ...     'Change in Mean Radiance (September 2019 vs. March 2020)'
+        ... ]
+        >>> # Plot Sept 2019 and March 2020
+        >>> fig, ax = plot_change(
+        >>>     pre_change=radiance_monthtly_mean.get('2019').get('09'),
+        >>>     post_change=radiance_monthtly_mean.get('2020').get('03'),
+                titles=plot_titles)
+    """
+    # Calculate difference (post-change - pre-change)
+    diff = post_change - pre_change
+
+    # Find absolute values for change min & max
+    diff_min_abs = np.absolute(diff.min())
+    diff_max_abs = np.absolute(diff.max())
+
+    # Determine max value (for plotting vmin/vmax)
+    diff_vmax = diff_min_abs if (diff_min_abs > diff_max_abs) else diff_max_abs
+
+    diff_vmin = -diff_vmax
+
+    # Define radiance units
+    units = r"$\mathrm{mol \cdot m^{-2}}$"
+
+    # Define title
+    diff_title = f"{title} ({units})"
+
+    # Define color maps
+    diff_cmap = "RdBu_r"
+
+    # Use dark background
+    with plt.style.context("dark_background"):
+
+        # Create figure and axes objects
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        # Add super title
+        plt.suptitle(f"{location} Nitrogen Dioxide Change", size=24)
+
+        # Adjust spacing
+        # plt.subplots_adjust(hspace=0.15)
+        plt.subplots_adjust(top=0.98)
+
+        # Plot diff array
+        ep.plot_bands(
+            diff,
+            scale=False,
+            title=diff_title,
+            vmin=diff_vmin,
+            vmax=diff_vmax,
+            cmap=diff_cmap,
+            ax=ax,
+        )
+
+        # Add caption
+        fig.text(
+            0.5, 0.15, f"Data Source: {data_source}", ha="center", fontsize=16
+        )
+
+        # Set title size
+        ax.title.set_size(20)
+
+    # Return figure and axes object
+    return fig, ax
+
+
+def plot_change_with_boundary(
+    pre_change,
+    post_change,
+    extent_file,
+    location="South Korea",
+    title="NO2",
+    data_source="European Space Agency",
+):
+    """Plots two arrays and the difference
+    between the arrays on the same figure.
+
+    pre_change : numpy array
+        Numpy array containing radiance values.
+
+    post_change : numpy array
+        Numpy array containing radiance values.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'Penn State Campus'.
+
+    titles : list of str, optional
+        Plot sub-titles. Default value is ['Radiance',
+        'Radiance', 'Radiance']. Intended for ['September
+        2019 Mean Radiance', 'March 2020 Mean Radiance',
+       'Change in Mean Radiance (September 2019 vs. March
+       2020)'].
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'NASA Black Marble'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot objects
+            The axes objects associated with the histogram.
+
+    Example
+    -------
+        >>> # Define titles
+        >>> plot_titles = [
+        ...     'September 2019 Mean Radiance',
+        ...     'March 2020 Mean Radiance',
+        ...     'Change in Mean Radiance (September 2019 vs. March 2020)'
+        ... ]
+        >>> # Plot Sept 2019 and March 2020
+        >>> fig, ax = plot_change(
+        >>>     pre_change=radiance_monthtly_mean.get('2019').get('09'),
+        >>>     post_change=radiance_monthtly_mean.get('2020').get('03'),
+                titles=plot_titles)
+    """
+    # Get plotting extent
+    with rio.open(extent_file) as src:
+        src_extent = plotting_extent(src)
+
+    # Calculate difference (post-change - pre-change)
+    diff = post_change - pre_change
+
+    # Find absolute values for change min & max
+    diff_min_abs = np.absolute(diff.min())
+    diff_max_abs = np.absolute(diff.max())
+
+    # Determine max value (for plotting vmin/vmax)
+    diff_vmax = diff_min_abs if (diff_min_abs > diff_max_abs) else diff_max_abs
+
+    diff_vmin = -diff_vmax
+
+    # Define radiance units
+    units = r"$\mathrm{mol \cdot m^{-2}}$"
+
+    # Define titles
+    diff_title = f"{title} ({units})"
+
+    # Define color maps
+    diff_cmap = "RdBu_r"
+
+    # Use dark background
+    with plt.style.context("dark_background"):
+
+        # Create figure and axes objects
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        # Add super title
+        plt.suptitle(f"{location} Nitrogen Dioxide Change", size=24)
+
+        # Adjust spacing
+        # plt.subplots_adjust(hspace=0.15)
+        plt.subplots_adjust(top=0.98)
+
+        # Plot diff array
+        ep.plot_bands(
+            diff,
+            scale=False,
+            title=diff_title,
+            vmin=diff_vmin,
+            vmax=diff_vmax,
+            cmap=diff_cmap,
+            ax=ax,
+            extent=src_extent,
+        )
+
+        # Add caption
+        fig.text(
+            0.5, 0.15, f"Data Source: {data_source}", ha="center", fontsize=16
+        )
+
+        # Set title size
+        ax.title.set_size(20)
+
+    # Return figure and axes object
+    return fig, ax
+
+
+def plot_percent_change(
+    percent_change,
+    location="South Korea",
+    title="NO2",
+    data_source="European Space Agency",
+):
+    """Plots two arrays and the difference
+    between the arrays on the same figure.
+
+    pre_change : numpy array
+        Numpy array containing radiance values.
+
+    post_change : numpy array
+        Numpy array containing radiance values.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'Penn State Campus'.
+
+    titles : list of str, optional
+        Plot sub-titles. Default value is ['Radiance',
+        'Radiance', 'Radiance']. Intended for ['September
+        2019 Mean Radiance', 'March 2020 Mean Radiance',
+       'Change in Mean Radiance (September 2019 vs. March
+       2020)'].
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'NASA Black Marble'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot objects
+            The axes objects associated with the histogram.
+
+    Example
+    -------
+        >>> # Define titles
+        >>> plot_titles = [
+        ...     'September 2019 Mean Radiance',
+        ...     'March 2020 Mean Radiance',
+        ...     'Change in Mean Radiance (September 2019 vs. March 2020)'
+        ... ]
+        >>> # Plot Sept 2019 and March 2020
+        >>> fig, ax = plot_change(
+        >>>     pre_change=radiance_monthtly_mean.get('2019').get('09'),
+        >>>     post_change=radiance_monthtly_mean.get('2020').get('03'),
+                titles=plot_titles)
+    """
+    # Find absolute values for change min & max
+    percent_change_min_abs = np.absolute(percent_change.min())
+    percent_change_max_abs = np.absolute(percent_change.max())
+
+    # Determine max value (for plotting vmin/vmax)
+    diff_vmax = (
+        percent_change_min_abs
+        if (percent_change_min_abs > percent_change_max_abs)
+        else percent_change_max_abs
+    )
+
+    diff_vmin = -diff_vmax
+
+    # Define radiance units
+    units = "%"
+
+    # Define titles
+    diff_title = f"{title} ({units})"
+
+    # Define color maps
+    diff_cmap = "RdBu_r"
+
+    # Use dark background
+    with plt.style.context("dark_background"):
+
+        # Create figure and axes objects
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        # Add super title
+        plt.suptitle(f"{location} Nitrogen Dioxide Change", size=24)
+
+        # Adjust spacing
+        # plt.subplots_adjust(hspace=0.15)
+        plt.subplots_adjust(top=0.98)
+
+        # Plot diff array
+        ep.plot_bands(
+            percent_change,
+            scale=False,
+            title=diff_title,
+            vmin=diff_vmin,
+            vmax=diff_vmax,
+            cmap=diff_cmap,
+            ax=ax,
+        )
+
+        # Add caption
+        fig.text(
+            0.5, 0.15, f"Data Source: {data_source}", ha="center", fontsize=16
+        )
+
+        # Set title size
+        ax.title.set_size(20)
+
+    # Return figure and axes object
+    return fig, ax
+
+
+def plot_percent_change_with_boundary(
+    percent_change,
+    extent_file,
+    location="South Korea",
+    title="NO2",
+    data_source="European Space Agency",
+):
+    """Plots two arrays and the difference
+    between the arrays on the same figure.
+
+    pre_change : numpy array
+        Numpy array containing radiance values.
+
+    post_change : numpy array
+        Numpy array containing radiance values.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'Penn State Campus'.
+
+    titles : list of str, optional
+        Plot sub-titles. Default value is ['Radiance',
+        'Radiance', 'Radiance']. Intended for ['September
+        2019 Mean Radiance', 'March 2020 Mean Radiance',
+       'Change in Mean Radiance (September 2019 vs. March
+       2020)'].
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'NASA Black Marble'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot objects
+            The axes objects associated with the histogram.
+
+    Example
+    -------
+        >>> # Define titles
+        >>> plot_titles = [
+        ...     'September 2019 Mean Radiance',
+        ...     'March 2020 Mean Radiance',
+        ...     'Change in Mean Radiance (September 2019 vs. March 2020)'
+        ... ]
+        >>> # Plot Sept 2019 and March 2020
+        >>> fig, ax = plot_change(
+        >>>     pre_change=radiance_monthtly_mean.get('2019').get('09'),
+        >>>     post_change=radiance_monthtly_mean.get('2020').get('03'),
+                titles=plot_titles)
+    """
+    # Get plotting extent
+    with rio.open(extent_file) as src:
+        src_extent = plotting_extent(src)
+
+    # Find absolute values for change min & max
+    percent_change_min_abs = np.absolute(percent_change.min())
+    percent_change_max_abs = np.absolute(percent_change.max())
+
+    # Determine max value (for plotting vmin/vmax)
+    diff_vmax = (
+        percent_change_min_abs
+        if (percent_change_min_abs > percent_change_max_abs)
+        else percent_change_max_abs
+    )
+
+    diff_vmin = -diff_vmax
+
+    # Define radiance units
+    units = "%"
+
+    # Define titles
+    diff_title = f"{title} ({units})"
+
+    # Define color maps
+    diff_cmap = "RdBu_r"
+
+    # Use dark background
+    with plt.style.context("dark_background"):
+
+        # Create figure and axes objects
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        # Add super title
+        plt.suptitle(f"{location} Nitrogen Dioxide Change", size=24)
+
+        # Adjust spacing
+        plt.subplots_adjust(hspace=0.15)
+        plt.subplots_adjust(top=0.98)
+
+        # Plot diff array
+        ep.plot_bands(
+            percent_change,
+            scale=False,
+            title=diff_title,
+            vmin=diff_vmin,
+            vmax=diff_vmax,
+            cmap=diff_cmap,
+            ax=ax,
+            extent=src_extent,
+        )
+
+        # Add caption
+        fig.text(
+            0.5, 0.15, f"Data Source: {data_source}", ha="center", fontsize=16
+        )
+
+        # Set title size
+        ax.title.set_size(20)
+
+    # Return figure and axes object
+    return fig, ax
+
+
+def plot_histogram(
+    radiance,
+    location="South Korea",
+    title="Distribution of Percent Change, Jan-Jun Mean NO2, 2019-2020",
+    xlabel="Percent Change",
+    ylabel="Pixel Count",
+    data_source="European Space Agency",
+    difference=True,
+):
+    """Plots the distribution of values in a radiance array.
+
+    Parameters
+    ----------
+    radiance : numpy array
+        Array containing raw values, mean values,
+        or difference values.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'Penn State Campus'.
+
+    title : str, optional
+        Plot sub-title. Default value is 'Distribution of
+        Radiance'. Intended for 'Distribution of September
+        2019 Mean Radiance' or 'Distribution of the Change
+        in Mean Radiance (September 2019 vs. March 2020).'
+
+    xlabel : str, optional
+        Label on the x-axis. Default value is 'Radiance'.
+
+    ylabel : str, optional
+        Label on the y-axis. Default value is 'Pixel Count'.
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'NASA Black Marble'.
+
+    difference : bool, optional
+        Boolean indicating if the array contains raw
+        values or mean values (False) or contains
+        difference values (True). Default value is False.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the histogram.
+
+    Example
+    -------
+        >>> # Plot Sept 2019 vs. March 2020 change histogram
+        >>> fig, ax = plot_histogram(
+        ...     diff_sep_2019_march_2020,
+        ...     title="Distribution of the Change in Mean Radiance",
+        ...     xlabel='Change in Mean Radiance',
+        ...     difference=True)
+    """
+    # Find absolute values for radiance min & max
+    radiance_min_abs = np.absolute(radiance.min())
+    radiance_max_abs = np.absolute(radiance.max())
+
+    # Determine max value (for plotting vmin/vmax)
+    plot_max = (
+        radiance_min_abs
+        if (radiance_min_abs > radiance_max_abs)
+        else radiance_max_abs
+    )
+
+    # Define vmin and vmax
+    hist_min = -plot_max if difference else 0
+    hist_max = plot_max
+
+    # Define histogram range
+    hist_range = (hist_min, hist_max)
+
+    # Define radiance units
+    units = "%"
+
+    # Use dark background
+    with plt.style.context("dark_background"):
+
+        # Create figure and axes object
+        fig, ax = ep.hist(
+            radiance,
+            hist_range=hist_range,
+            colors="#984ea3",
+            title=title,
+            xlabel=f"{xlabel} ({units})",
+            ylabel=ylabel,
+        )
+
+        # Add super title
+        plt.suptitle(f"{location} Nitrogen Dioxide", size=24)
+
+        # Adjust spacing
+        plt.subplots_adjust(top=0.9)
+
+        # Add caption
+        fig.text(
+            0.5, 0.03, f"Data Source: {data_source}", ha="center", fontsize=14
+        )
+
+    # Return figure and axes object
+    return fig, ax
+
+
+def extract_plotting_extent(raster_path):
+    """Extracts the plotting extent from a raster.
+
+    Parameters
+    ----------
+    raster_path : str
+        Path to the raster file.
+
+    Returns
+    -------
+    raster_extent : tuple
+        Tuple containing (longitude min, longitude max,
+        latitude min, latitude max).
+
+    Example
+    -------
+        >>> # Extract plotting extent
+        >>> extract_plotting_extent(
+        ...  "S5P-OFFL-L3-NO2-20190101-20190630-MEAN-MOL-PER-M2.tif"
+        ... )
+        (125.0, 131.0, 33.1, 38.7)
+    """
+    # Raise error for invalid file path
+    if not os.path.exists(raster_path):
+        raise ValueError("Invalid raster file path.")
+
+    # Get plotting extent
+    with rio.open(raster_path) as src:
+        raster_extent = plotting_extent(src)
+
+    return raster_extent
+
+
+def project_vector(vector_path, raster_path):
+    """Projects a vector to match a raster CRS if the two differ.
+
+    Parameters
+    ----------
+    vector_path : str
+        Path to the vector file. The file that will be projected.
+
+    raster_path : str
+        Path to the raster file. The file that has the CRS to which
+        the vector will be projected.
+
+    Returns
+    -------
+    vector_projected : geopandas geodataframe
+        Geodataframe of the vector in the same CRS as the raster file.
+
+    Example
+    -------
+
+    """
+    # Raise error for invalid file path
+    if not os.path.exists(vector_path):
+        raise ValueError("Invalid vector file path.")
+    if not os.path.exists(raster_path):
+        raise ValueError("Invalid raster file path.")
+
+    # Project vector to raster CRS if the two do not match
+    vector = gpd.read_file(vector_path)
+    with rio.open(raster_path) as src:
+        vector_projected = (
+            vector.to_crs(src.crs) if vector.crs != src.crs else vector
+        )
+
+    return vector_projected
+
+
+def create_polygon_from_extent(extent):
+    """Creates a Shapely polygon from a bounding box extent.
+
+    Parameters
+    ----------
+    extent : tuple
+        Tuple containing (longitude min, longitude max,
+        latitude min, latitude max).
+
+    Returns
+    -------
+    polygon : shapely.geometry.polygon.Polygon
+
+    Example
+    -------
+
+    """
+    # Raise errors for invalid extent values
+    if not isinstance(extent, tuple):
+        raise TypeError("Extent must be a tuple")
+    if len(extent) != 4:
+        raise ValueError(
+            "Extent must have 4 values: (lon_min, lon_max, lat_min, lat_max)."
+        )
+    if extent[0] == extent[1]:
+        raise ValueError("Extent longitude min/max must differ.")
+    if extent[2] == extent[3]:
+        raise ValueError("Extent latitude min/max must differ.")
+    if (extent[0] >= extent[1]) or (extent[2] >= extent[3]):
+        raise ValueError(
+            "Extent order must be: (lon_min, lon_max, lat_min, lat_max)."
+        )
+    if extent[0] < -180:
+        raise ValueError("Minimum longitude must be >= -180.")
+    if extent[1] > 180:
+        raise ValueError("Maximum longitude must be <= 180.")
+    if extent[2] < -90:
+        raise ValueError("Minimum latitude must be >= -90.")
+    if extent[3] > 90:
+        raise ValueError("Maximum latitude must be <= 90.")
+
+    # Create polygon from extent
+    polygon = Polygon(
+        [
+            (extent[0], extent[2]),
+            (extent[0], extent[3]),
+            (extent[1], extent[3]),
+            (extent[1], extent[2]),
+            (extent[0], extent[2]),
+        ]
+    )
+
+    return polygon
+
+
+def read_geotiff_into_array(geotiff_path, dimensions=1):
+    """Reads a GeoTif file into a Numpy array.
+
+    Parameters
+    ----------
+    geotiff_path : str
+        Path to the GeoTiff file.
+
+    Returns
+    -------
+    array : numpy array
+        Array containing the data.
+
+    Example
+    -------
+
+    """
+    # Read-in array
+    with rio.open(geotiff_path) as file:
+        array = file.read(dimensions)
+
+    return array
+
+
+def extract_geotiff_metadata(geotiff_path):
+    """Extracts the metadata from a GeoTiff file.
+
+    Parameters
+    ----------
+    geotiff_path : str
+        Path to the GeoTiff file.
+
+    Returns
+    -------
+    metadata : dict
+        Dictionary containing the metadata.
+
+    Example
+    -------
+
+    """
+    # Extract metadata
+    with rio.open(geotiff_path) as file:
+        metadata = file.meta
+
+    return metadata
