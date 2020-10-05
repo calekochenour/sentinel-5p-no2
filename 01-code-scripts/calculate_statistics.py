@@ -9,9 +9,10 @@ import radiance as rd
 import sentinel as stl
 
 # Define path to Level-3 netCDF files
-netcdf_level3_folder = os.path.join(
-    "03-processed-data", "netcdf", "south-korea"
-)
+# netcdf_level3_folder = os.path.join(
+#     "03-processed-data", "netcdf", "south-korea"
+# )
+netcdf_level3_folder = os.path.join("03-processed-data", "netcdf", "singapore")
 
 # PREPROCESS DATA
 # Store Level-3 netCDF data in dictionary
@@ -19,8 +20,8 @@ no2_level3_dict = stl.store_level3_data(netcdf_level3_folder)
 
 # PROCESS DATA
 # Define start and end dates to extract
-start_date = "2020-01-01"
-end_date = "2020-06-30"
+start_date = "2019-01-01"
+end_date = "2019-06-30"
 date_range = f"{start_date.replace('-', '')}-{end_date.replace('-', '')}"
 
 # Exract NO2 arrays to a list
@@ -61,7 +62,8 @@ for stat_name, stat_array in statistics.items():
             output_path=os.path.join(
                 "03-processed-data",
                 "raster",
-                "south-korea",
+                # "south-korea",
+                "singapore",
                 "statistics",
                 f"{stat_name}-MOL-PER-M2.tif",
             ),

@@ -7,7 +7,8 @@ import glob
 import sentinel as stl
 
 # Get Level-2 netCDF files; retaining only those with data (file size > 0)
-netcdf_level2_folder = os.path.join("02-raw-data", "netCDF", "south-korea")
+# netcdf_level2_folder = os.path.join("02-raw-data", "netCDF", "south-korea")
+netcdf_level2_folder = os.path.join("02-raw-data", "netCDF", "singapore")
 netcdf_level2_files = [
     file
     for file in glob.glob(os.path.join(netcdf_level2_folder, "*.nc"))
@@ -25,7 +26,9 @@ level2_to_level3_parameters = {
     "quality_variable": "tropospheric_NO2_column_number_density_validity",
     "quality_comparison": ">",
     "quality_threshold": 75,
-    "bounding_box": (125.0, 33.1, 131.0, 38.7),
+    # "bounding_box": (125.0, 33.1, 131.0, 38.7), # South Korea
+    # Singapore with 10-cell buffer each direction
+    "bounding_box": (103.6 - 0.25, 1.15 - 0.25, 104.1 + 0.25, 1.5 + 0.25),
     "cell_size": 0.025,
     "derive_variables": [
         # "tropospheric_NO2_column_number_density [molec/cm^2]",
@@ -42,11 +45,17 @@ level2_to_level3_parameters = {
 }
 
 # Define output parameters
+# level3_netcdf_output_folder = os.path.join(
+#     "03-processed-data", "netcdf", "south-korea"
+# )
 level3_netcdf_output_folder = os.path.join(
-    "03-processed-data", "netcdf", "south-korea"
+    "03-processed-data", "netcdf", "singapore"
 )
+# level3_geotiff_output_folder = os.path.join(
+#     "03-processed-data", "raster", "south-korea"
+# )
 level3_geotiff_output_folder = os.path.join(
-    "03-processed-data", "raster", "south-korea"
+    "03-processed-data", "raster", "singapore"
 )
 level3_output_type = "S5P-OFFL-L3-NO2"
 level3_output_units = "mol-per-m2"  # alt. "molec-per-cm2"
