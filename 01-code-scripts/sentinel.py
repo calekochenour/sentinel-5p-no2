@@ -1401,6 +1401,31 @@ def plot_histogram(
     return fig, ax
 
 
+def plot_normalized_histogram(
+    data,
+    location="South Korea",
+    data_source="European Space Agency",
+    title="Distribution of Percent Masked, Jul 2018 - Jul 2020",
+    xlabel="Percent Masked (%)",
+    ylabel="Normalized Pixel Count (Probability Density)",
+):
+    """Plots the distribution of data, normalized to a probability density."""
+    # Plot histogram normalized to form a probability density
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(12, 12))
+        plt.hist(data, density=True, bins=20, color="#984ea3")
+        plt.suptitle(f"{location} Nitrogen Dioxide", size=24)
+        plt.subplots_adjust(top=0.9)
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        fig.text(
+            0.5, 0.03, f"Data Source: {data_source}", ha="center", fontsize=14
+        )
+
+    return fig, ax
+
+
 def extract_plotting_extent(raster_path):
     """Extracts the plotting extent from a raster.
 
