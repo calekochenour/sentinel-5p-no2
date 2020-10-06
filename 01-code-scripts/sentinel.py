@@ -1404,12 +1404,52 @@ def plot_histogram(
 def plot_normalized_histogram(
     data,
     location="South Korea",
-    data_source="European Space Agency",
     title="Distribution of Percent Masked, Jul 2018 - Jul 2020",
     xlabel="Percent Masked (%)",
     ylabel="Normalized Pixel Count (Probability Density)",
+    data_source="European Space Agency",
 ):
-    """Plots the distribution of data, normalized to a probability density."""
+    """Plots the distribution of data, normalized to a probability density.
+
+    Parameters
+    ----------
+    data : numpy array
+        Array containing to plot.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'South Korea'.
+
+    title : str, optional
+        Plot sub-title. Default value is 'Distribution of Percent Masked,
+        Jul 2018 - Jul 2020'.
+
+    xlabel : str, optional
+        Label on the x-axis. Default value is 'Percent Masked (%)'.
+
+    ylabel : str, optional
+        Label on the y-axis. Default value is 'Normalized Pixel Count
+        (Probability Density)'.
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the histogram.
+
+    Example
+    -------
+        >>> # Plot normalized histogram
+        >>> fig, ax = plot_normalized_histogram(percent_masked_arr)
+    """
     # Plot histogram normalized to form a probability density
     with plt.style.context("dark_background"):
         fig, ax = plt.subplots(figsize=(12, 12))
