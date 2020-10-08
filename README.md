@@ -18,7 +18,7 @@ Contains all original/unprocessed data.
 
 Contains all created/processed data.
 
-### `04-graphics-outputs`
+### `04-graphics-outputs/`
 
 Contains all figures and plots.
 
