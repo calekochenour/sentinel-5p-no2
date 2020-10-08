@@ -18,6 +18,10 @@ Contains all original/unprocessed data.
 
 Contains all created/processed data.
 
+### `04-graphics-outputs`
+
+Contains all figures and plots.
+
 ### `environment.yml`
 
 Contains all information to create the Conda environment required to run the Python and Jupyter Notebook files in the `01-code-scripts/` folder.  
