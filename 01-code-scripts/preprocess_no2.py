@@ -8,7 +8,7 @@ import sentinel as stl
 
 # Get Level-2 netCDF files; retaining only those with data (file size > 0)
 # netcdf_level2_folder = os.path.join("02-raw-data", "netCDF", "south-korea")
-netcdf_level2_folder = os.path.join("02-raw-data", "netCDF", "singapore")
+netcdf_level2_folder = os.path.join("02-raw-data", "netcdf", "singapore")
 netcdf_level2_files = [
     file
     for file in glob.glob(os.path.join(netcdf_level2_folder, "*.nc"))
