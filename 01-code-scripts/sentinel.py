@@ -1637,3 +1637,249 @@ def extract_geotiff_metadata(geotiff_path):
         metadata = file.meta
 
     return metadata
+
+
+def calculate_magnitude_change(pre_change, post_change):
+    """Calculates the magnitude change from the pre-change data
+    to the post-change data (post-change minus pre-change).
+
+    Parameters
+    ----------
+    pre_change : numpy array
+        Array containing the pre-change data.
+
+    post_change : numpy array
+        Array containing the post-change data.
+
+    Returns
+    -------
+    magnitude_change : numpy array
+        Array containing the magnitude difference between
+        the post-change and pre-change arrays.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Raise error if input data are not arrays
+    if not (
+        isinstance(pre_change, np.ndarray)
+        or isinstance(post_change, np.ndarray)
+    ):
+        raise TypeError("Input data must be of type array.")
+
+    # Calculate magnitude change
+    magnitude_change = post_change - pre_change
+
+    return magnitude_change
+
+
+def calculate_percent_change(pre_change, post_change):
+    """Calculates the percent change from the pre-change data
+    to the post-change data (post-change minus pre-change).
+    Parameters
+    ----------
+    pre_change : numpy array
+        Array containing the pre-change data.
+
+    post_change : numpy array
+        Array containing the post-change data.
+
+    Returns
+    -------
+    percent_change : numpy array
+        Array containing the percent difference between
+        the post-change and pre-change arrays.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Raise error if input data are not arrays
+    if not (
+        isinstance(pre_change, np.ndarray)
+        or isinstance(post_change, np.ndarray)
+    ):
+        raise TypeError("Input data must be of type array.")
+
+    # Calculate percent change
+    percent_change = np.divide((post_change - pre_change), pre_change) * 100
+
+    return percent_change
+
+
+def plot_monthly_comparison(
+    pre_change,
+    post_change,
+    extent_file,
+    country_boundaries,
+    country_names,
+    change_type="magnitude",
+    location="South Korea",
+    titles=["Subplot 1", "Subplot 2", "Subplot 3"],
+    data_source="European Space Agency",
+):
+    """Plots a comparison between the mean NO2 for two different months.
+
+    Parameters
+    ----------
+    pre_change : numpy array
+        Array containing pre-change data.
+
+    post_change : numpy array
+        Array containing post-change data.
+
+    extent_file : str
+        Path to a GeoTiff file from which to extract the plotting extent
+        for the data.
+
+    country_boundaries : list of geopandas geodataframes
+        List containing the country boundaries to add.
+
+    country_names : list of str
+        List containing the country names (for labeling plots).
+
+    change_type : str, optional
+        Type of change to display for in the third subplot. Valid options
+        are 'magnitude' and 'percent'. Default value is 'magnitude'.
+
+    location : str, optional
+        Name of study area location. Included in plot
+        super-title. Default value is 'South Korea'.
+
+    titles : list of str, optional
+        Subplot titles.
+        Default value is ['Subplot 1', 'Subplot 2', 'Subplot 3'].
+        Ex: ['May 2019 Mean NO2', 'May 2020 Mean NO2', 'Change in Mean NO2'].
+
+    data_source : str, optional
+        Sources of data used in the plot.
+        Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the histogram.
+
+        ax : matplotlib.axes._subplots.AxesSubplot objects
+            The axes objects associated with the histogram.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Raise error for invalid change type
+    if change_type.lower() not in ["magnitude", "percent"]:
+        raise ValueError("Change type must be 'magnitude' or 'perent'.")
+
+    # Extract magnitude min/max for plotting (from pre- and post-change data)
+    magnitude_vmax = np.array([pre_change.max(), post_change.max()]).max()
+    magnitude_vmin = 0
+
+    # Calculate change
+    change = (
+        calculate_magnitude_change(
+            pre_change=pre_change, post_change=post_change
+        )
+        if change_type == "magnitude"
+        else calculate_percent_change(
+            pre_change=pre_change, post_change=post_change
+        )
+    )
+
+    # Extract change min/max (for plotting vmin/vmax)
+    change_vmax = (
+        np.absolute(change.min())
+        if (np.absolute(change.min()) > np.absolute(change.max()))
+        else np.absolute(change.max())
+    )
+    change_vmin = -change_vmax
+
+    # Get plotting extent
+    extent = extract_plotting_extent(extent_file)
+
+    # Define plot settings
+    magnitude_cmap = "inferno"
+    change_cmap = "RdBu_r"
+
+    # Plot data
+    with plt.style.context("dark_background"):
+        # Initialize figure/axes
+        fig, ax = plt.subplots(1, 3, figsize=(24, 8))
+        plt.suptitle(f"{location} Nitrogen Dioxide", size=24)
+        plt.subplots_adjust(hspace=0.15)
+        plt.subplots_adjust(top=0.98)
+
+        # Subplot 1 (pre-change)
+        ep.plot_bands(
+            pre_change,
+            scale=False,
+            title=titles[0],
+            vmin=magnitude_vmin,
+            vmax=magnitude_vmax,
+            cmap=magnitude_cmap,
+            ax=ax[0],
+            extent=extent,
+        )
+
+        # Subplot 2 (post-change)
+        ep.plot_bands(
+            post_change,
+            scale=False,
+            title=titles[1],
+            vmin=magnitude_vmin,
+            vmax=magnitude_vmax,
+            cmap=magnitude_cmap,
+            ax=ax[1],
+            extent=extent,
+        )
+
+        # Subplot 3 (change)
+        ep.plot_bands(
+            change,
+            scale=False,
+            title=titles[2],
+            vmin=change_vmin,
+            vmax=change_vmax,
+            cmap=change_cmap,
+            ax=ax[2],
+            extent=extent,
+        )
+
+        # Add country boundaries and legend to axes
+        for axis in ax:
+            country_boundaries[0].boundary.plot(
+                edgecolor="#e41a1c",
+                linewidth=0.5,
+                ax=axis,
+                alpha=1,
+                label=country_names[0],
+            )
+            country_boundaries[1].boundary.plot(
+                edgecolor="#1b7837",
+                linewidth=0.5,
+                ax=axis,
+                alpha=1,
+                label=country_names[1],
+            )
+            axis.legend(
+                shadow=True, edgecolor="white", fontsize=10, loc="lower right"
+            )
+
+        # Add caption
+        fig.text(
+            0.5, 0.15, f"Data Source: {data_source}", ha="center", fontsize=16
+        )
+
+    return fig, ax
