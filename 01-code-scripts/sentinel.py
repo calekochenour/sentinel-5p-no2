@@ -1781,7 +1781,7 @@ def plot_monthly_comparison(
     """
     # Raise error for invalid change type
     if change_type.lower() not in ["magnitude", "percent"]:
-        raise ValueError("Change type must be 'magnitude' or 'perent'.")
+        raise ValueError("Change type must be 'magnitude' or 'percent'.")
 
     # Extract magnitude min/max for plotting (from pre- and post-change data)
     magnitude_vmax = np.array([pre_change.max(), post_change.max()]).max()
