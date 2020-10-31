@@ -11,7 +11,7 @@ Specify the bounding box with the following variables: `lon_min`, `lon_max`, `la
 Navigate in the terminal to the folder where files will be downloaded to (e.g.):
 
 ```bash
-$ cd ~/02-raw-data/netcf/south-korea
+$ cd ~/02-raw-data/netcdf/south-korea
 ```
 
 Activate the Conda environment:
