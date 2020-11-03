@@ -13,6 +13,7 @@ import geopandas as gpd
 import rasterio as rio
 from rasterio.plot import plotting_extent
 from rasterio.transform import from_origin
+import rasterstats as rs
 import harp
 from harp._harppy import NoDataError
 import earthpy.plot as ep
@@ -2064,3 +2065,128 @@ def plot_monthly_comparison_limit_scale(
         )
 
     return fig, ax
+
+
+def aggregate_raster_data(
+    raster_path, vector_path, zonal_statistics="count sum"
+):
+    """Aggregates raster data to vector polygons, based on specified
+    aggregation metrics.
+
+    Parameters
+    ----------
+    raster_path : str
+        Path to raster file containing data that will be aggregated.
+
+    vector_path : str
+        Path to the vector file containing polygons to which data will
+        be aggregated.
+
+    zonal_statistics : space-delimited str, optional
+        Zonal statistics to calculate. Default value is 'count sum'.
+
+    Returns
+    -------
+    aggregated_data : geopandas geodataframe
+        Geodataframe containing the raster data aggreagated with the
+        vector polygons.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Extract data and metadata from raster
+    with rio.open(raster_path) as src:
+        data = src.read(1, masked=True)
+        metadata = src.profile
+
+    # Extract zonal stats into geodataframe
+    aggregated_data = gpd.GeoDataFrame.from_features(
+        rs.zonal_stats(
+            vectors=gpd.read_file(vector_path),
+            raster=data,
+            nodata=metadata.get("nodata"),
+            affine=metadata.get("transform"),
+            geojson_out=True,
+            copy_properties=True,
+            stats=zonal_statistics,
+        )
+    )
+
+    return aggregated_data
+
+
+def magnitude_change(pre_change, post_change):
+    """Calculates the magnitude change."""
+    # Calculate magnitude change
+    change = post_change - pre_change
+
+    return change
+
+
+def percent_change(pre_change, post_change):
+    """Calculates the percent change."""
+    # Calculate percent change
+    change = (
+        (post_change - pre_change) / pre_change * 100 if pre_change != 0 else 0
+    )
+
+    return change
+
+
+def get_geometry(shapefile_path, geometry_column="geometry"):
+    """Returns a geodataframe with only the index and geometry columns."""
+    # Get geodataframe with only geometry column
+    geometry = gpd.read_file(shapefile_path)[[geometry_column]]
+
+    return geometry
+
+
+def clean_data(geodatframe, new_name):
+    """Creates a new dataframe with only the mean data and renames
+    the mean column to a specified name.
+    """
+    # Create new dataframe with mean data and rename column
+    cleaned_data = geodatframe[["mean"]].rename(
+        columns={"mean": new_name}, copy=True
+    )
+
+    return cleaned_data
+
+
+def add_change(
+    dataframe,
+    pre_change_column,
+    post_change_column,
+    new_column,
+    change_type="magnitude",
+):
+    """Calculates and adds a magnitude or percent change column
+    to all dataframe rows, based on two input columns.
+    """
+    # Calculate and add change
+    dataframe[new_column] = (
+        dataframe.apply(
+            lambda row: magnitude_change(
+                pre_change=row[pre_change_column],
+                post_change=row[post_change_column],
+            ),
+            axis=1,
+        )
+        if change_type == "magnitude"
+        else dataframe.apply(
+            lambda row: percent_change(
+                pre_change=row[pre_change_column],
+                post_change=row[post_change_column],
+            ),
+            axis=1,
+        )
+    )
+
+    # Set output message
+    message = print(f"Added new column: {new_column}")
+
+    return message
