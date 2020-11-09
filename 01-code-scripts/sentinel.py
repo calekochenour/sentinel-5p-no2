@@ -5,8 +5,10 @@ import re
 import glob
 from netCDF4 import Dataset
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import numpy.ma as ma
+import pandas as pd
 from pandas.io.json import json_normalize
 from shapely.geometry import Polygon
 import geopandas as gpd
@@ -2190,3 +2192,277 @@ def add_change(
     message = print(f"Added new column: {new_column}")
 
     return message
+
+
+def plot_aggregate_change(
+    aggregated_data,
+    magnitude_change,
+    percent_change,
+    vector_boundary,
+    plot_vector=False,
+    super_title="Nitrogen Dioxide Change",
+    data_source="European Space Agency",
+    figsize=(20, 8),
+):
+    """Plots the NO2 change aggregated a different levels.
+
+    Parameters
+    ----------
+    aggregated_data : geopandas geodataframe
+        Geodataframe containing the aggregated data.
+
+    magnitude_change : str
+        Column name for the magnitude change.
+
+    percent_change : str
+        Column name for the percent change.
+
+    vector_boundary : geopandas geodataframe
+        Geodataframe containing a vector layer to be overlayed.
+
+    plot_vector : bool, optional
+        Whether or not to plot the vector layer. Default value is False.
+
+    super_title : str, optional
+        Main plot title. Default value is 'Nitrogen Dioxide Change'.
+
+    data_source : str, optional
+        Data source. Default value is 'European Space Agency'
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Determine magnitude plot scale
+    magnitude_max_absolute = abs(aggregated_data[magnitude_change].max())
+    magnitude_min_absolute = abs(aggregated_data[magnitude_change].min())
+    magnitude_vmax = (
+        magnitude_max_absolute
+        if magnitude_max_absolute > magnitude_min_absolute
+        else magnitude_min_absolute
+    )
+
+    # Plot magnitude and percent change
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(1, 2, figsize=figsize)
+        plt.suptitle(super_title, size=24)
+
+        # Set legend options
+        divider_magnitude = make_axes_locatable(ax[0])
+        divider_percent = make_axes_locatable(ax[1])
+        cax_magnitude = divider_magnitude.append_axes(
+            "right", size="5%", pad=-0.25
+        )
+        cax_percent = divider_percent.append_axes(
+            "right", size="5%", pad=-0.25
+        )
+
+        # Magnitude change
+        aggregated_data.plot(
+            column=magnitude_change,
+            ax=ax[0],
+            legend=True,
+            cax=cax_magnitude,
+            vmax=magnitude_vmax,
+            vmin=-magnitude_vmax,
+            cmap="RdBu_r",
+            linewidth=0.25,
+            edgecolor="gray",
+        )
+
+        # Plot vector boundary
+        if plot_vector:
+            vector_boundary.plot(
+                ax=ax[0], facecolor="None", edgecolor="black", linewidth=0.5
+            )
+
+        # Configure axes
+        ax[0].set_title("Magnitude Change")
+        ax[0].set_xlabel("Longitude (degrees)")
+        ax[0].set_ylabel("Latitude (degrees)")
+
+        # Percent change
+        aggregated_data.plot(
+            column=percent_change,
+            ax=ax[1],
+            legend=True,
+            cax=cax_percent,
+            cmap="RdBu_r",
+            vmin=-100,
+            vmax=100,
+            linewidth=0.25,
+            edgecolor="gray",
+        )
+
+        # Plot vector boundary
+        if plot_vector:
+            vector_boundary.plot(
+                ax=ax[1],
+                facecolor="None",
+                edgecolor="black",
+                linewidth=0.5,
+            )
+
+        # Configure axes
+        ax[1].set_title("Percent Change")
+        ax[1].set_xlabel("Longitude (degrees)")
+        ax[1].set_ylabel("Latitude (degrees)")
+
+        # Add caption
+        fig.text(
+            0.5,
+            0,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=16,
+        )
+
+    return fig, ax
+
+
+def clean_time_series(time_series_path):
+    """Prepares time series data for plotting
+
+    Parameters
+    ----------
+    time_series_path : str
+        Path to the time series data (geopackage, .gpkg file).
+
+    Returns
+    -------
+    cleaned_time_series : pandas dataframe
+        Cleaned dataframe containing plot-ready data.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Get time series data into dataframe
+    time_series = pd.DataFrame(
+        gpd.read_file(time_series_path).drop(columns=["geometry"])
+    ).set_index(keys="GRID_ID", drop=True)
+
+    # Remove index name
+    time_series.index.name = None
+
+    # Transpose; get timestamps as rows and grid ids as columns
+    time_series_transposed = time_series.transpose()
+
+    # Set new index name
+    time_series_transposed.index.name = "date"
+
+    # Convert index values from string to datetime objects (for plotting)
+    time_series_transposed.index = pd.to_datetime(time_series_transposed.index)
+
+    # Create copy of transposed dataframe (to return)
+    cleaned_time_series = time_series_transposed.copy()
+
+    return cleaned_time_series
+
+
+def plot_no2_time_series(
+    time_series,
+    grid_id,
+    data_location="South Korea",
+    data_source="European Space Agency",
+):
+    """Plots a time series for an aggregated hexagon grid.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the time series data.
+
+    grid_id : str
+        Grid ID to plot.
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Location of the data. Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Compute mean and standard deviation
+    mean = time_series.describe()[[grid_id]].loc["mean"][0]
+    standard_deviation = time_series.describe()[[grid_id]].loc["std"][0]
+
+    # Plot NO2 time series
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(24, 8))
+
+        # Add NO2 data, mean line, mean + stddev, and mean - stddev lines
+        plt.scatter(
+            time_series.index,
+            time_series[[grid_id]],
+            color="#ff7f00",
+            zorder=4,
+        )
+        ax.axhline(
+            mean,
+            color="#4daf4a",
+            label="Mean",
+            linewidth=2,
+        )
+        ax.axhline(
+            mean + standard_deviation,
+            color="#984ea3",
+            label="1 Standard Deviation",
+            linewidth=2,
+        )
+        ax.axhline(
+            mean - standard_deviation,
+            color="#984ea3",
+            linewidth=2,
+        )
+
+        # Configure axes, legend, caption
+        ax.set_title(
+            f"NO2 Time Series, {data_location}, Hexagon {grid_id}", fontsize=24
+        )
+        ax.set_xlabel("Date", fontsize=20)
+        ax.set_ylabel(r"NO2 ($\mathrm{mol \cdot m^{-2}}$)", fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.legend(shadow=True, edgecolor="white", fontsize=20)
+        fig.text(
+            0.5,
+            -0.025,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=20,
+        )
+
+    return fig, ax

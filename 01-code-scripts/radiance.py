@@ -676,7 +676,7 @@ def subtract_arrays(minuend, subtrahend):
         print(
             (
                 f"ERROR - Array shape mismatch ({minuend.shape} vs. "
-                "{subtrahend.shape})\nReturning empty array."
+                f"{subtrahend.shape})\nReturning empty array."
             )
         )
         difference = np.empty(0)
