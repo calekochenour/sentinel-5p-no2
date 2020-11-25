@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import numpy.ma as ma
+from scipy.interpolate import UnivariateSpline
 import pandas as pd
 from pandas.io.json import json_normalize
 from shapely.geometry import Polygon
@@ -2381,6 +2382,7 @@ def plot_no2_time_series(
     grid_id,
     data_location="South Korea",
     data_source="European Space Agency",
+    add_study_area_max=False,
 ):
     """Plots a time series for an aggregated hexagon grid.
 
@@ -2397,6 +2399,10 @@ def plot_no2_time_series(
 
     data_source : str, optional
         Location of the data. Default value is 'European Space Agency'.
+
+    add_study_area_max : bool, optional
+        Boolean to add the study area maximum to the figure. Default value is
+        False.
 
     Returns
     -------
@@ -2415,7 +2421,7 @@ def plot_no2_time_series(
         >>>
         >>>
     """
-    # Compute mean and standard deviation
+    # Compute mean and standard deviation for the grid cell
     mean = time_series.describe()[[grid_id]].loc["mean"][0]
     standard_deviation = time_series.describe()[[grid_id]].loc["std"][0]
 
@@ -2423,7 +2429,7 @@ def plot_no2_time_series(
     with plt.style.context("dark_background"):
         fig, ax = plt.subplots(figsize=(24, 8))
 
-        # Add NO2 data, mean line, mean + stddev, and mean - stddev lines
+        # Add NO2 data, mean, mean + stddev, mean - stddev, and maximum lines
         plt.scatter(
             time_series.index,
             time_series[[grid_id]],
@@ -2433,7 +2439,7 @@ def plot_no2_time_series(
         ax.axhline(
             mean,
             color="#4daf4a",
-            label="Mean",
+            label="Grid Cell Mean",
             linewidth=2,
         )
         ax.axhline(
@@ -2447,6 +2453,13 @@ def plot_no2_time_series(
             color="#984ea3",
             linewidth=2,
         )
+        if add_study_area_max:
+            ax.axhline(
+                time_series.stack().max(),
+                color="#e41a1c",
+                label="Study Area Maximum",
+                linewidth=2,
+            )
 
         # Configure axes, legend, caption
         ax.set_title(
@@ -2456,7 +2469,9 @@ def plot_no2_time_series(
         ax.set_ylabel(r"NO2 ($\mathrm{mol \cdot m^{-2}}$)", fontsize=20)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
-        ax.legend(shadow=True, edgecolor="white", fontsize=20)
+        ax.legend(
+            shadow=True, edgecolor="white", fontsize=20, loc="upper right"
+        )
         fig.text(
             0.5,
             -0.025,
@@ -2466,3 +2481,286 @@ def plot_no2_time_series(
         )
 
     return fig, ax
+
+
+def convert_dataframe_column_to_array(dataframe_column, output_dtype=None):
+    """Converts a Pandas dataframe column to a 1D NumPy array."""
+    # Convert datafram column to array
+    datatype = output_dtype if output_dtype else dataframe_column.dtype
+    array = (
+        np.array(object=dataframe_column, dtype=datatype, copy=True)
+        .transpose()
+        .ravel()
+    )
+
+    return array
+
+
+def plot_spline(
+    time_series,
+    grid_id,
+    spline_start,
+    spline_end,
+    plot_start,
+    plot_end,
+    add_study_area_max=False,
+    add_grid_cell_max=False,
+    data_location="South Korea",
+    data_source="European Space Agency",
+):
+    """Creates a cubic spline plot for aggregated NO2 time series data.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the aggregated NO2 time series data.
+
+    grid_id : str
+        ID for the grid cell to compute the spline for and plot.
+
+    spline_start : str
+        Start date for the spline computation.
+
+    spline_end : str
+        End date for the spline computation.
+
+    plot_start : str
+        Start date for the plot.
+
+    plot_end : str
+        End date for the plot.
+
+    add_study_area_max : bool, optional
+        Boolean to add the study area time series maximum to the figure. This
+        is the maximum aggregated mean over all grid IDs/cells in the study
+        area time series. Default value is False.
+
+    add_grid_cell_max : bool, optional
+        Boolean to add the grid cell time series maximum to the figure. This
+        is the maximum aggregated mean over the single grid ID/cell chosen for
+        the plot. Default value is False.
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Location of the data. Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+        cubic_spline : scipy.interpolate.fitpack2.LSQUnivariateSpline object
+            Spline from the input data.
+
+    Example
+    ------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # SPLINE COMPUTATION
+    # Subset original time series to spline start and end dates
+    time_series_subset_spline = time_series[[grid_id]].loc[
+        spline_start:spline_end
+    ]
+
+    # Get dates and NO2 values into arrays
+    original_dates = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_spline.index,
+        output_dtype="datetime64[ns]",
+    )
+    original_dates_as_float = original_dates.astype("float")
+    original_no2 = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_spline[grid_id]
+    )
+
+    # Set spline weights; fill NO2 NAN values with 0.0
+    spline_weights = ~np.isnan(original_no2)
+    original_no2_filled = np.copy(original_no2)
+    original_no2_filled[~spline_weights] = 0.0
+
+    # Create new dates for spline interpolation (hourly frequency)
+    spline_dates_computation = np.array(
+        pd.date_range(
+            start=original_dates[0], end=original_dates[-1], freq="1H"
+        )
+    )
+    spline_dates_computation_as_float = spline_dates_computation.astype(
+        "float"
+    )
+
+    # Create spline function
+    cubic_spline = UnivariateSpline(
+        x=original_dates_as_float,
+        y=original_no2_filled,
+        w=spline_weights,
+        k=3,
+    )
+
+    # Apply spline function to hourly date frequency
+    spline_no2 = cubic_spline(spline_dates_computation_as_float)
+
+    # PLOTTING
+    # Subset original time series to plot start and end dates
+    time_series_subset_plot = time_series[[grid_id]].loc[plot_start:plot_end]
+
+    # Get arrays for plotting - original data
+    plot_dates = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_plot.index,
+        output_dtype="datetime64[ns]",
+    )
+    plot_no2 = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_plot[grid_id]
+    )
+
+    # Create dataframe with spline values
+    spline_subset_plot = pd.DataFrame(
+        data=spline_no2, index=spline_dates_computation, columns=[grid_id]
+    ).loc[plot_start:plot_end]
+
+    # Get arrays for plotting - spline
+    spline_dates_plot = convert_dataframe_column_to_array(
+        dataframe_column=spline_subset_plot.index,
+        output_dtype="datetime64[ns]",
+    )
+    spline_no2_plot = convert_dataframe_column_to_array(
+        dataframe_column=spline_subset_plot[grid_id]
+    )
+
+    # Plot original and spline data
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(20, 10))
+        plt.plot(
+            plot_dates,
+            plot_no2,
+            "ro",
+            markersize=5,
+            color="#ff7f00",
+            label="Aggregated Daily NO2",
+        )
+        plt.plot_date(
+            x=spline_dates_plot,
+            y=spline_no2_plot,
+            markersize=2.5,
+            color="#4daf4a",
+            label="Cubic Spline",
+        )
+
+        # Add time series maximum values
+        if add_study_area_max:
+            ax.axhline(
+                time_series.stack().max(),
+                color="#e41a1c",
+                label="Study Area Maximum",
+                linewidth=2,
+                zorder=1,
+            )
+
+        if add_grid_cell_max:
+            ax.axhline(
+                time_series[[grid_id]].max()[0],
+                color="#984ea3",  # 377eb8
+                label="Grid ID Maximum",
+                linewidth=2,
+                zorder=1,
+            )
+
+        # Configure axes, legend, caption
+        ax.set_title(
+            (
+                f"NO2 Time Series, {data_location}, Hexagon {grid_id}\n"(
+                    f"Spline Dates: {reformat_date(spline_start)} - "
+                    f"{reformat_date(spline_end)}\n"
+                )(
+                    f"Plot Dates:     {reformat_date(plot_start)} - "
+                    f"{reformat_date(plot_end)}"
+                )
+            ),
+            fontsize=24,
+        )
+        ax.set_xlabel("Date", fontsize=20)
+        ax.set_ylabel(r"NO2 ($\mathrm{mol \cdot m^{-2}}$)", fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.legend(
+            shadow=True, edgecolor="white", fontsize=20, loc="upper right"
+        )
+        fig.text(
+            0.5,
+            0.02,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=16,
+        )
+
+    return fig, ax, cubic_spline
+
+
+def reformat_date(date):
+    """Reformats a date from YYYY-MM-DD to MM/DD/YYYY.
+
+    Parameters
+    ----------
+    date : str
+        Date to reformat. Must be in the following form: YYYY-MM-DD.
+
+    Returns
+    ------
+    date_reformatted : str
+        Reformatted date, in the following form: MM/DD/YYYY.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Reformat date to MM/DD/YYYY
+    date_reformatted = f"{date[5:7]}/{date[8:]}/{date[:4]}"
+
+    return date_reformatted
+
+
+def get_spline_details(spline):
+    """Returns the spline coefficients, knots, and residual.
+
+    Parameters
+    ----------
+    spline : scipy.interpolate.fitpack2.LSQUnivariateSpline object
+        Spline from which to get details.
+
+    Returns
+    -------
+    tuple
+
+        coefficients : numpy.ndarray of numpy.float64 objects
+            Array containing the spline coefficients.
+
+        knots : numpy.ndarray of numpy.datetime64 objects
+            Array containing the spline knots.
+
+        residual : float
+            Spline residual.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Get coefficients, knots, and residual
+    coefficients = spline.get_coeffs()
+    knots = spline.get_knots().astype("datetime64[ns]")
+    residual = spline.get_residual()
+
+    return coefficients, knots, residual
