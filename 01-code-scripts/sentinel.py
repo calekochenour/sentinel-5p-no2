@@ -2674,16 +2674,17 @@ def plot_spline(
             )
 
         # Configure axes, legend, caption
+        title_top = f"NO2 Time Series, {data_location}, Hexagon {grid_id}"
+        title_middle = (
+            f"Spline Dates: {reformat_date(spline_start)} - "
+            f"{reformat_date(spline_end)}"
+        )
+        title_bottom = (
+            f"Plot Dates:     {reformat_date(plot_start)} - "
+            f"{reformat_date(plot_end)}"
+        )
         ax.set_title(
-            (
-                f"NO2 Time Series, {data_location}, Hexagon {grid_id}\n"(
-                    f"Spline Dates: {reformat_date(spline_start)} - "
-                    f"{reformat_date(spline_end)}\n"
-                )(
-                    f"Plot Dates:     {reformat_date(plot_start)} - "
-                    f"{reformat_date(plot_end)}"
-                )
-            ),
+            f"{title_top}\n{title_middle}\n{title_bottom}",
             fontsize=24,
         )
         ax.set_xlabel("Date", fontsize=20)
