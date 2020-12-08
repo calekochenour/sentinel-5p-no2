@@ -3,6 +3,7 @@
 import os
 import re
 import glob
+from datetime import timedelta
 from netCDF4 import Dataset
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -2335,7 +2336,7 @@ def plot_aggregate_change(
 
 
 def clean_time_series(time_series_path):
-    """Prepares time series data for plotting
+    """Prepares time series data for plotting.
 
     Parameters
     ----------
@@ -2644,14 +2645,14 @@ def plot_spline(
             "ro",
             markersize=5,
             color="#ff7f00",
-            label="Aggregated Daily NO2",
+            label="Mean Aggregated NO2",
         )
         plt.plot_date(
             x=spline_dates_plot,
             y=spline_no2_plot,
             markersize=2.5,
             color="#4daf4a",
-            label="Cubic Spline",
+            label="Cubic Smoothing Spline",
         )
 
         # Add time series maximum values
@@ -2674,7 +2675,7 @@ def plot_spline(
             )
 
         # Configure axes, legend, caption
-        title_top = f"NO2 Time Series, {data_location}, Hexagon {grid_id}"
+        title_top = f"NO2 Time Series, {data_location}, Grid {grid_id}"
         title_middle = (
             f"Spline Dates: {reformat_date(spline_start)} - "
             f"{reformat_date(spline_end)}"
@@ -2765,3 +2766,421 @@ def get_spline_details(spline):
     residual = spline.get_residual()
 
     return coefficients, knots, residual
+
+
+def save_figure(output_path):
+    """Saves the current figure to a specified location.
+
+    Parameters
+    ----------
+    output_path : str
+        Path (including file name and extension)
+        for the output file.
+
+    Returns
+    -------
+    message : str
+        Message indicating location of saved file
+        (upon success) or error message (upon failure)/
+
+    Example
+    -------
+    >>> # Set output path sand save figure
+    >>> outpath = os.path.join("04-graphics-outputs", "figure.png")
+    >>> save_figure(outpath)
+    Saved plot: 04-graphics-outputs\\figure.png
+    """
+    # Save figure
+    try:
+        plt.savefig(
+            fname=output_path, facecolor="k", dpi=300, bbox_inches="tight"
+        )
+    except Exception as error:
+        message = print(f"Failed to save plot: {error}")
+    else:
+        message = print(f"Saved plot: {os.path.split(output_path)[-1]}")
+
+    # Return message
+    return message
+
+
+def calculate_deltas(time_series, grid_id, max_difference=30):
+    """Creates lists of timestamp and NO2 differences for measurements
+    within 30 hours.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the time series data.
+
+    grid_id : str
+        Grid ID to plot.
+
+    Returns
+    -------
+    tuple
+        time_deltas, no2_deltas : list
+            Lists containing the time and NO2 delta values.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Initialize returns
+    count = 0
+    nan_count = 0
+    time_deltas = []
+    no2_deltas = []
+
+    # Compare timestamps
+    for time_0 in time_series[[grid_id]].index:
+        for time_1 in time_series[[grid_id]].index:
+            # Calculate timestamp difference
+            time_difference = time_1 - time_0
+            # Run calculations for timestamp differences within a
+            #  specified duration
+            if (time_difference <= timedelta(hours=max_difference)) and (
+                time_difference > timedelta(hours=0)
+            ):
+                # Extract NO2 values
+                time_0_no2 = time_series.loc[time_0][0]
+                time_1_no2 = time_series.loc[time_1][0]
+                # Add timestamp and NO2 deltas to lists (excluding NO2
+                #  measurements with NaN values for time_0 or time_1)
+                if np.isnan(time_0_no2) or np.isnan(time_1_no2):
+                    nan_count += 1
+                else:
+                    # Add deltas to lists
+                    time_deltas.append(time_difference)
+                    no2_deltas.append(np.absolute(time_1_no2 - time_0_no2))
+                    count += 1
+
+    # Set output messages
+    print(
+        (
+            f"Calculated deltas for {count}/{count + nan_count} "
+            f"timestamp pairs within {max_difference} hours."
+        )
+    )
+    print(
+        (
+            f"Skipped calculations (NaN values) for "
+            f"{nan_count}/{count + nan_count} timestamp pairs within "
+            f"{max_difference} hours."
+        )
+    )
+
+    return time_deltas, no2_deltas
+
+
+def convert_time_to_hours(time):
+    """Converts a Timedelta to hours.
+
+    Parameters
+    ----------
+    time : pandas._libs.tslibs.timedeltas.Timedelta objects
+        Timedetla.
+
+    Returns
+    -------
+    hours : float
+        Timedelts in hours.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Convert to hours
+    hours = time.total_seconds() / 3600
+
+    return hours
+
+
+def format_time_delta(time_delta):
+    """Formats timestamp deltas for plotting.
+
+    Parameters
+    ----------
+    time_delta : list
+        List containing the time values.
+
+    Returns
+    -------
+    time_arr : numpy array
+        Array containing the time delta values, converted to hours.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Convert time array
+    time_arr = np.array([convert_time_to_hours(time) for time in time_delta])
+
+    return time_arr
+
+
+def format_no2_delta(no2_delta):
+    """Formats NO2 deltas for plotting.
+
+    Parameters
+    ----------
+    no2_delta : list
+        List containing the NO2 delta values.
+
+    Returns
+    -------
+    no2_array : numpy array
+        Array containing the NO2 delta values.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Convert NO2 to array
+    no2_arr = np.array(no2_delta)
+
+    return no2_arr
+
+
+def extract_grid_statistic(time_series, grid_id, statistic_type="mean"):
+    """Extract a specified statistic from an NO2 grid cell.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the time series data.
+
+    grid_id : str
+        Grid ID from which to extract the mean and median value.
+
+    statistic_type : {'mean', 'median'}
+        Statistic to extract.
+
+    Returns
+    -------
+    statistic : float
+        Calculated statistic.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Extract statistic
+    if statistic_type == "mean":
+        statistic = time_series[[grid_id]].mean()[0]
+    elif statistic_type == "median":
+        statistic = time_series[[grid_id]].median()[0]
+    else:
+        raise ValueError("Invalid statistic. Must be 'mean' or 'median'.")
+
+    return statistic
+
+
+def convert_deltas_to_arrays(time_delta, no2_delta, time_series, grid_id):
+    """Converts timestamp and NO2 deltas to arrays, for plotting.
+
+    Parameters
+    ----------
+    time_delta : list
+        List containing the timestamp delta values.
+
+    no2_delta : list
+        List containing the NO2 delta values.
+
+    time_series : pandas dataframe
+        Dataframe containing the time series data.
+
+    grid_id : str
+        Grid ID from which to extract the mean and median value.
+
+    Returns
+    -------
+    tuple
+
+        time_delta_arr : numpy array
+            Array containing the time delta values, converted to hours.
+
+        no2_delta_arr : numpy array
+            Array containing the NO2 delta values.
+
+        no2_delta_standardized_mean_arr : numpy array
+            Array containing the NO2 delta values, as a percent of the
+            grid mean value.
+
+        no2_delta_standardized_median_arr : numpy array
+            Array containing the NO2 delta values, as a percent of the
+            grid median value.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Convert deltas to arrays
+    time_delta_arr = format_time_delta(time_delta=time_delta)
+    no2_delta_arr = format_no2_delta(no2_delta=no2_delta)
+    no2_delta_standardized_mean_arr = standardize_no2_delta(
+        no2_delta=no2_delta,
+        standard_metric=time_series[[grid_id]].mean()[0],
+    )
+    no2_delta_standardized_median_arr = standardize_no2_delta(
+        no2_delta=no2_delta,
+        standard_metric=time_series[[grid_id]].median()[0],
+    )
+
+    return (
+        time_delta_arr,
+        no2_delta_arr,
+        no2_delta_standardized_mean_arr,
+        no2_delta_standardized_median_arr,
+    )
+
+
+def standardize_no2_delta(no2_delta, standard_metric):
+    """Calculates the NO2 delta as a percent of the specified metric.
+
+    Parameters
+    ----------
+    no2_delta : list
+        List containing the NO2 delta values.
+
+    Returns
+    -------
+    standardized : numpy array
+        Array containing the NO2 delta values, as a percent of the
+        specified metric (mean, median, max, etc.).
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Standardize deltas
+    standardized = np.array(
+        [delta / standard_metric * 100 for delta in no2_delta]
+    )
+
+    return standardized
+
+
+def plot_deltas(
+    time,
+    no2,
+    grid_id,
+    x_max=30,
+    y_max=None,
+    x_label="Time Difference (hours)",
+    y_label=r"NO2 ($\mathrm{mol \cdot m^{-2}}$)",
+    standard_metric_value=None,
+    standard_metric_title="Mean",
+    data_location="South Korea",
+    data_source="European Space Agency",
+):
+    """Plots the NO2 deltas vs. the timestamp deltas for a grid cell.
+
+    Parameters
+    ----------
+    time : numpy array
+        Array containing the time delta values, in hours.
+
+    no2 : numpy array
+        Array containing the NO2 delta values, raw or standardized.
+
+    x_max : int or float, optional
+        Maximum limit (in hours) for the x-axis. Default value is 30.
+
+    y_max : int or float, optional
+        Maximum limit for the y-axis. Default value is None.
+
+    x_label : str, optional
+        Label for the x-axis. Default value is 'Time Difference (hours)'.
+
+    y_label : str, optional
+        Label for the y-axis.
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Location of the data. Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+    Example
+    ------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Plot NO2 delta vs. timestamp delta
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(20, 10))
+        plt.scatter(
+            time,
+            no2,
+            marker="o",
+            s=25,
+            color="#ff7f00",
+            label="NO2 Delta",
+        )
+
+        # Add standard metric
+        if standard_metric_value:
+            ax.axhline(
+                standard_metric_value,
+                color="#e41a1c",
+                label=f"{standard_metric_title}",
+                linewidth=2,
+                zorder=1,
+            )
+
+        # Configure axes, legend, caption
+        ax.set_title(
+            f"NO2 Deltas, {data_location}, Grid {grid_id}",
+            fontsize=24,
+        )
+        ax.set_xlabel(x_label, fontsize=20)
+        ax.set_ylabel(y_label, fontsize=20)
+        ax.set_xlim(0, x_max)
+        if y_max:
+            ax.set_ylim(0, y_max)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+        fig.text(
+            0.5,
+            0.02,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=16,
+        )
+
+    return fig, ax
