@@ -2804,7 +2804,9 @@ def save_figure(output_path):
     return message
 
 
-def calculate_deltas(time_series, grid_id, max_difference=30):
+def calculate_deltas(
+    time_series, grid_id, max_difference=30, return_absolute=True
+):
     """Creates lists of timestamp and NO2 differences for measurements
     within 30 hours.
 
@@ -2816,11 +2818,20 @@ def calculate_deltas(time_series, grid_id, max_difference=30):
     grid_id : str
         Grid ID to plot.
 
+    max_difference : int or float, optional
+        Maximum comparable time difference, in hours. Default value is 30.
+
+    return_absolute : bool, optional
+        Whether to return absolute values of the magnitude and percent
+        changes (True) or to return the raw values (False) Default value
+        is True.
+
     Returns
     -------
     tuple
-        time_deltas, no2_deltas : list
-            Lists containing the time and NO2 delta values.
+        time_deltas, no2_deltas_magnitude, no2_deltas_percent : list
+            Lists containing the time and NO2 delta values. Time values
+            are in hours, and NO2 deltas are in mol/m^2 and percent.
 
     Example
     -------
@@ -2833,7 +2844,8 @@ def calculate_deltas(time_series, grid_id, max_difference=30):
     count = 0
     nan_count = 0
     time_deltas = []
-    no2_deltas = []
+    no2_deltas_magnitude = []
+    no2_deltas_percent = []
 
     # Compare timestamps
     for time_0 in time_series[[grid_id]].index:
@@ -2846,8 +2858,8 @@ def calculate_deltas(time_series, grid_id, max_difference=30):
                 time_difference > timedelta(hours=0)
             ):
                 # Extract NO2 values
-                time_0_no2 = time_series.loc[time_0][0]
-                time_1_no2 = time_series.loc[time_1][0]
+                time_0_no2 = time_series[grid_id].loc[time_0]
+                time_1_no2 = time_series[grid_id].loc[time_1]
                 # Add timestamp and NO2 deltas to lists (excluding NO2
                 #  measurements with NaN values for time_0 or time_1)
                 if np.isnan(time_0_no2) or np.isnan(time_1_no2):
@@ -2855,7 +2867,22 @@ def calculate_deltas(time_series, grid_id, max_difference=30):
                 else:
                     # Add deltas to lists
                     time_deltas.append(time_difference)
-                    no2_deltas.append(np.absolute(time_1_no2 - time_0_no2))
+                    if return_absolute:
+                        # Absolute values
+                        no2_deltas_magnitude.append(
+                            np.absolute(time_1_no2 - time_0_no2)
+                        )
+                        no2_deltas_percent.append(
+                            np.absolute(
+                                (time_1_no2 - time_0_no2) / time_0_no2 * 100
+                            )
+                        )
+                    else:
+                        # Raw values
+                        no2_deltas_magnitude.append(time_1_no2 - time_0_no2)
+                        no2_deltas_percent.append(
+                            (time_1_no2 - time_0_no2) / time_0_no2 * 100
+                        )
                     count += 1
 
     # Set output messages
@@ -2873,7 +2900,7 @@ def calculate_deltas(time_series, grid_id, max_difference=30):
         )
     )
 
-    return time_deltas, no2_deltas
+    return time_deltas, no2_deltas_magnitude, no2_deltas_percent
 
 
 def convert_time_to_hours(time):
@@ -3082,16 +3109,117 @@ def standardize_no2_delta(no2_delta, standard_metric):
     return standardized
 
 
+# def plot_deltas(
+#     time,
+#     no2,
+#     grid_id,
+#     x_max=30,
+#     y_max=None,
+#     x_label="Time Difference (hours)",
+#     y_label=r"NO2 ($\mathrm{mol \cdot m^{-2}}$)",
+#     standard_metric_value=None,
+#     standard_metric_title="Mean",
+#     data_location="South Korea",
+#     data_source="European Space Agency",
+# ):
+#     """Plots the NO2 deltas vs. the timestamp deltas for a grid cell.
+#
+#     Parameters
+#     ----------
+#     time : numpy array
+#         Array containing the time delta values, in hours.
+#
+#     no2 : numpy array
+#         Array containing the NO2 delta values, raw or standardized.
+#
+#     x_max : int or float, optional
+#         Maximum limit (in hours) for the x-axis. Default value is 30.
+#
+#     y_max : int or float, optional
+#         Maximum limit for the y-axis. Default value is None.
+#
+#     x_label : str, optional
+#         Label for the x-axis. Default value is 'Time Difference (hours)'.
+#
+#     y_label : str, optional
+#         Label for the y-axis.
+#
+#     data_location : str, optional
+#         Location of the data. Default value is 'South Korea'.
+#
+#     data_source : str, optional
+#         Location of the data. Default value is 'European Space Agency'.
+#
+#     Returns
+#     -------
+#     tuple
+#
+#         fig : matplotlib.figure.Figure object
+#             The figure object associated with the plot.
+#
+#         ax : matplotlib.axes._subplots.AxesSubplot object
+#             The axes object associated with the plot.
+#
+#     Example
+#     ------
+#         >>>
+#         >>>
+#         >>>
+#         >>>
+#     """
+#     # Plot NO2 delta vs. timestamp delta
+#     with plt.style.context("dark_background"):
+#         fig, ax = plt.subplots(figsize=(20, 10))
+#         plt.scatter(
+#             time, no2, marker="o", s=25, color="#ff7f00", label="NO2 Delta",
+#         )
+#
+#         # Add standard metric
+#         if standard_metric_value:
+#             ax.axhline(
+#                 standard_metric_value,
+#                 color="#e41a1c",
+#                 label=f"{standard_metric_title}",
+#                 linewidth=2,
+#                 zorder=1,
+#             )
+#
+#         # Configure axes, legend, caption
+#         ax.set_title(
+#             f"NO2 Deltas, {data_location}, Grid {grid_id}", fontsize=24,
+#         )
+#         ax.set_xlabel(x_label, fontsize=20)
+#         ax.set_ylabel(y_label, fontsize=20)
+#         ax.set_xlim(0, x_max)
+#         if y_max:
+#             ax.set_ylim(0, y_max)
+#         plt.xticks(fontsize=20)
+#         plt.yticks(fontsize=20)
+#         ax.legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+#         fig.text(
+#             0.5,
+#             0.02,
+#             f"Data Source: {data_source}",
+#             ha="center",
+#             fontsize=16,
+#         )
+
+#     return fig, ax
+
+
 def plot_deltas(
-    time,
-    no2,
+    time_delta,
+    no2_delta_magnitude,
+    no2_delta_percent,
     grid_id,
     x_max=30,
-    y_max=None,
-    x_label="Time Difference (hours)",
-    y_label=r"NO2 ($\mathrm{mol \cdot m^{-2}}$)",
-    standard_metric_value=None,
-    standard_metric_title="Mean",
+    y_min_magnitude=None,
+    y_max_magnitude=None,
+    y_min_percent=None,
+    y_max_percent=None,
+    x_label="Time Delta (hours)",
+    y_label_magnitude=r"NO2 Delta ($\mathrm{mol \cdot m^{-2}}$)",
+    y_label_percent=r"NO2 Delta (%)",
     data_location="South Korea",
     data_source="European Space Agency",
 ):
@@ -3099,29 +3227,42 @@ def plot_deltas(
 
     Parameters
     ----------
-    time : numpy array
+    time_delta : numpy array
         Array containing the time delta values, in hours.
 
-    no2 : numpy array
-        Array containing the NO2 delta values, raw or standardized.
+    no2_delta_magnitude, no2_delta_percent : numpy array
+        Arrays containing the NO2 delta values, in magnitude and percent.
+
+    grid_id : str
+        Grid ID for the data (for plot title).
 
     x_max : int or float, optional
-        Maximum limit (in hours) for the x-axis. Default value is 30.
+        Maximum limit (in hours) for the x-axis, for both the magnitude
+        and percent subplots. Default value is 30.
 
-    y_max : int or float, optional
-        Maximum limit for the y-axis. Default value is None.
+    y_min_magnitude, y_max_magnitude : int or float, optional
+        Minimum and maximum limits for magnitude subplot y-axis.
+        Default values are None.
+
+    y_min_percent, y_max_percent : int or float, optional
+        Minimum and maximum limits for percent subplot y-axis.
+        Default values are None.
 
     x_label : str, optional
-        Label for the x-axis. Default value is 'Time Difference (hours)'.
+        Label for the x-axis, for both the magnitude and percent
+        subplots. Default value is 'Time Delta (hours)'.
 
-    y_label : str, optional
-        Label for the y-axis.
+    y_label_magnitude, : str, optional
+        Label for the y-axis, for the magnitude subplot.
+
+    y_label_percent : str, optional
+        Label for the y-axis, for the percent subplot.
 
     data_location : str, optional
         Location of the data. Default value is 'South Korea'.
 
     data_source : str, optional
-        Location of the data. Default value is 'European Space Agency'.
+        Source of the data. Default value is 'European Space Agency'.
 
     Returns
     -------
@@ -3142,39 +3283,57 @@ def plot_deltas(
     """
     # Plot NO2 delta vs. timestamp delta
     with plt.style.context("dark_background"):
-        fig, ax = plt.subplots(figsize=(20, 10))
-        plt.scatter(
-            time,
-            no2,
+        fig, ax = plt.subplots(1, 2, figsize=(20, 10))
+        ax[0].scatter(
+            time_delta,
+            no2_delta_magnitude,
             marker="o",
             s=25,
             color="#ff7f00",
-            label="NO2 Delta",
+            label="Delta",
+        )
+        ax[1].scatter(
+            time_delta,
+            no2_delta_percent,
+            marker="o",
+            s=25,
+            color="#ff7f00",
+            label="Delta",
         )
 
-        # Add standard metric
-        if standard_metric_value:
-            ax.axhline(
-                standard_metric_value,
-                color="#e41a1c",
-                label=f"{standard_metric_title}",
-                linewidth=2,
-                zorder=1,
-            )
-
-        # Configure axes, legend, caption
-        ax.set_title(
-            f"NO2 Deltas, {data_location}, Grid {grid_id}",
-            fontsize=24,
-        )
-        ax.set_xlabel(x_label, fontsize=20)
-        ax.set_ylabel(y_label, fontsize=20)
-        ax.set_xlim(0, x_max)
-        if y_max:
-            ax.set_ylim(0, y_max)
+        # Configure figure, axes, legend, caption
+        # Figure
+        plt.suptitle(f"NO2 Deltas, {data_location}, Grid {grid_id}", size=24)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
-        ax.legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+
+        # Subplot 1
+        ax[0].set_title("Magnitude", fontsize=20)
+        ax[0].set_xlabel(x_label, fontsize=20)
+        ax[0].set_ylabel(y_label_magnitude, fontsize=20)
+        ax[0].set_xlim(0, x_max)
+        if y_min_magnitude and not y_max_magnitude:
+            ax[0].set_ylim(bottom=y_min_magnitude)
+        elif y_max_magnitude and not y_min_magnitude:
+            ax[0].set_ylim(top=y_max_magnitude)
+        else:
+            ax[0].set_ylim(bottom=y_min_magnitude, top=y_max_magnitude)
+        ax[0].legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+
+        # Subplot 2
+        ax[1].set_title("Percent", fontsize=20)
+        ax[1].set_xlabel(x_label, fontsize=20)
+        ax[1].set_ylabel(y_label_percent, fontsize=20)
+        ax[1].set_xlim(0, x_max)
+        if y_min_percent and not y_max_percent:
+            ax[1].set_ylim(bottom=y_min_percent)
+        elif y_max_percent and not y_min_percent:
+            ax[1].set_ylim(top=y_max_percent)
+        else:
+            ax[1].set_ylim(bottom=y_min_percent, top=y_max_percent)
+        ax[1].legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+
+        # Caption
         fig.text(
             0.5,
             0.02,
