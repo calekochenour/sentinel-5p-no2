@@ -2781,7 +2781,7 @@ def save_figure(output_path):
     -------
     message : str
         Message indicating location of saved file
-        (upon success) or error message (upon failure)/
+        (upon success) or error message (upon failure).
 
     Example
     -------
@@ -2981,7 +2981,7 @@ def format_no2_delta(no2_delta):
     return no2_arr
 
 
-def extract_grid_statistic(time_series, grid_id, statistic_type="mean"):
+def extract_grid_statistic(time_series, grid_id, statistic="mean"):
     """Extract a specified statistic from an NO2 grid cell.
 
     Parameters
@@ -2992,12 +2992,12 @@ def extract_grid_statistic(time_series, grid_id, statistic_type="mean"):
     grid_id : str
         Grid ID from which to extract the mean and median value.
 
-    statistic_type : {'mean', 'median'}
+    statistic : {'count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max'}
         Statistic to extract.
 
     Returns
     -------
-    statistic : float
+    calculated_statistic : float
         Calculated statistic.
 
     Example
@@ -3007,15 +3007,26 @@ def extract_grid_statistic(time_series, grid_id, statistic_type="mean"):
     >>>
     >>>
     """
-    # Extract statistic
-    if statistic_type == "mean":
-        statistic = time_series[[grid_id]].mean()[0]
-    elif statistic_type == "median":
-        statistic = time_series[[grid_id]].median()[0]
-    else:
-        raise ValueError("Invalid statistic. Must be 'mean' or 'median'.")
+    # Raise errors
+    statistics = [
+        "count",
+        "mean",
+        "std",
+        "min",
+        "25%",
+        "50%",
+        "75%",
+        "max",
+    ]
+    if statistic not in statistics:
+        raise ValueError(
+            f"Statistic must be one of the following: {statistics}"
+        )
 
-    return statistic
+    # Extract statistic
+    calculated_statistic = time_series[grid_id].describe()[statistic]
+
+    return calculated_statistic
 
 
 def convert_deltas_to_arrays(time_delta, no2_delta, time_series, grid_id):
