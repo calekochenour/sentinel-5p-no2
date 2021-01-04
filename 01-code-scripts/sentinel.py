@@ -423,6 +423,58 @@ def extract_no2_data(netcdf_path):
     return no2_data_filled_flipped
 
 
+def extract_co_data(netcdf_path):
+    """Extracts CO data from a Sentinel-5P netCDF4 file
+    to a NumPy array and fills no data with NaN values.
+
+    Intended for use with resampled data (Sentinel-5P L3).
+
+    Parameters
+    ----------
+    netcdf_path : str
+        Path to the netCDF file.
+
+    Returns
+    -------
+    no2_data_filled : numpy array
+        Array containing extracted CO values and no
+        data values filled with NaN, if applicable.
+
+    Example
+    -------
+        >>> # Define file path
+        >>> netcdf_file = os.path.join(
+        ...     "03-processed-data",
+        ...     "S5P-OFFL-L3-CO-MOL-PER-M2-2019-06-01-T032134Z.nc"
+        ... )
+        >>> # Extract CO data
+        >>> co_data = extract_co_data(netcdf_file)
+    """
+    # Open .nc file as netCDF Dataset
+    with Dataset(netcdf_path, "r") as netcdf_resampled:
+
+        # Get CO data
+        co_data = netcdf_resampled.variables.get("CO_column_number_density")[0]
+
+        # Change fill value to NaN and fill array
+        if isinstance(co_data, np.ma.core.MaskedArray):
+
+            # Change fill value to NaN
+            ma.set_fill_value(co_data, np.nan)
+
+            # Fill masked values with NaN
+            co_data_filled = co_data.filled()
+
+        else:
+            co_data_filled = np.copy(co_data)
+
+        # Flip array to correct orientation
+        co_data_filled_flipped = np.flipud(co_data_filled)
+
+    # Return array
+    return co_data_filled_flipped
+
+
 def store_no2_data(no2_data, no2_dict, acquisition_time):
     """Stores NO2 array in a dictionary, indexed by
     data acquisition year, month, day, and time.
@@ -782,6 +834,64 @@ def convert_level2_to_level3(
         else:
             # Extract Level-3 data to array
             level3_data = extract_no2_data(level3_path)
+
+            # Create transform
+            transform = extract_no2_transform(level3_path)
+
+            # Define export metadata
+            metadata = rd.create_metadata(
+                array=level3_data, transform=transform, nodata=np.nan
+            )
+
+            # Define outpath
+            output_path = os.path.join(
+                level3_geotiff_folder,
+                f"{level3_prefix}-{acquisition_time}.tif",
+            )
+
+            # Export array to GeoTiff
+            rd.export_array(
+                array=level3_data, output_path=output_path, metadata=metadata
+            )
+
+
+def convert_level2_to_level3_co(
+    level2_folder,
+    import_operations,
+    level3_netcdf_folder,
+    level3_geotiff_folder,
+    level3_prefix,
+):
+    """Converts Sentinel-5P Level-2 netCDF files to Level-3
+    netCDF and GeoTiff files.
+    """
+    # Create harp import operations string
+    operations = create_import_operations(**import_operations)
+
+    # Loop through Level-2 files
+    for level2_file in level2_folder:
+
+        # Extract acquisition time
+        acquisition_time = extract_acquisition_time(level2_file)
+
+        try:
+            # Convert netCDF from Level-2 to Level-3
+            level3_path = resample_netcdf4(
+                level2_file,
+                operations,
+                export_folder=level3_netcdf_folder,
+                file_prefix=level3_prefix,
+                acquisition_time=acquisition_time,
+            )
+
+        # Empty file (no data)
+        except NoDataError as error:
+            print(f"{acquisition_time} {error}")
+
+        # Non-empty file
+        else:
+            # Extract Level-3 data to array
+            level3_data = extract_co_data(level3_path)
 
             # Create transform
             transform = extract_no2_transform(level3_path)
@@ -3354,3 +3464,195 @@ def plot_deltas(
         )
 
     return fig, ax
+
+
+def calculate_time_series_statistics(
+    time_series_path, start_date=None, end_date=None
+):
+    """Calcutes statistics (count, mean, std, min, 25%, 50%, 75%, max)
+    for each grid cell over a specified date range, in preparation
+    for plotting.
+
+    Parameters
+    ----------
+    time_series_path : str
+        Path to the time series file.
+
+    start_date, end_date : str
+        Start and end dates for filtering/reducing the time series.
+        Must be in the following format: 'YYYY-MM-DD'.
+
+
+    Returns
+    -------
+    time_series_merged : geopandas geodataframe
+        Geodataframe containing the grid cell statistics and grid
+        cell geometry.
+
+    Example
+    -------
+    >>>
+    >>>
+    >>>
+    >>>
+    """
+    # Read time series into geodataframe; reduce to GRID_ID and geometry
+    #  columns
+    time_series_gdf = gpd.read_file(time_series_path)
+    time_series_gdf = time_series_gdf[["GRID_ID", "geometry"]].set_index(
+        keys="GRID_ID", drop=True
+    )
+
+    # Read time series into dataframe
+    time_series_df = clean_time_series(time_series_path)
+
+    # Slice time series to start and end dates
+    if start_date and end_date:
+        time_series_df = time_series_df.loc[start_date:end_date]
+    elif start_date and not end_date:
+        time_series_df = time_series_df.loc[start_date:]
+    elif end_date and not start_date:
+        time_series_df = time_series_df.loc[:end_date]
+    else:
+        time_series_df = time_series_df
+
+    # Prepare time series dataframe for merging with geometry geodataframe
+    time_series_df = time_series_df.describe().transpose()
+    time_series_df.index.name = "GRID_ID"
+
+    # Merge geometry geodataframe with time series datafram
+    time_series_merged = time_series_gdf.merge(time_series_df, on="GRID_ID")
+
+    return time_series_merged
+
+
+# -------------------------GLOBAL VARIABLES---------------------------------- #
+# Country bounding boxes
+BOUNDING_BOXES = {
+    # Singapore with 10-pixel buffer in each direction
+    "Singapore": (103.6 - 0.25, 1.15 - 0.25, 104.1 + 0.25, 1.5 + 0.25),
+    # South Korea
+    "South Korea": (125.0, 33.1, 131.0, 38.7),
+}
+
+# Level-2 data folders (containing netCDF files)
+NETCDF_LEVEL2_FOLDERS = {
+    # Singapore
+    "Singapore": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": "",
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join("02-raw-data", "netcdf", "singapore"),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "",
+    },
+    # South Korea
+    "South Korea": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": os.path.join(
+            "02-raw-data", "netCDF", "south-korea", "carbon-monoxide"
+        ),
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join(
+            "02-raw-data", "netCDF", "south-korea"
+        ),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "",
+    },
+}
+
+# Level-3 data folders (containing netCDF anf GeoTiff files)
+LEVEL3_NETCDF_OUTPUT_FOLDERS = {
+    # Singapore
+    "Singapore": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": "",
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join(
+            "03-processed-data", "netcdf", "singapore"
+        ),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "O3_TCL",
+    },
+    # South Korea
+    "South Korea": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": os.path.join(
+            "03-processed-data", "netcdf", "south-korea", "carbon-monoxide"
+        ),
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join(
+            "03-processed-data", "netcdf", "south-korea"
+        ),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "O3_TCL",
+    },
+}
+
+LEVEL3_GEOTIFF_OUTPUT_FOLDERS = {
+    # Singapore
+    "Singapore": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": "",
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join("02-raw-data", "netcdf", "singapore"),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "O3_TCL",
+    },
+    # South Korea
+    "South Korea": {
+        "UV Aerosol Index": "",
+        "Aerosol Layer Height": "",
+        "Carbon Monoxide": os.path.join(
+            "02-raw-data", "netCDF", "south-korea", "carbon-monoxide"
+        ),
+        "Cloud": "",
+        "Formaldehyde": "",
+        "Methane": "",
+        "Nitrogen Dioxide": os.path.join(
+            "02-raw-data", "netCDF", "south-korea"
+        ),
+        "Sulphur Dioxide": "",
+        "Ozone": "",
+        "Tropospheric Ozone": "O3_TCL",
+    },
+}
+
+# Output file name options
+LEVEL3_OUTPUT_TYPES = {
+    "UV Aerosol Index": "",
+    "Aerosol Layer Height": "",
+    "Carbon Monoxide": "S5P-OFFL-L3-CO",
+    "Cloud": "",
+    "Formaldehyde": "",
+    "Methane": "",
+    "Nitrogen Dioxide": "S5P-OFFL-L3-NO2",
+    "Sulphur Dioxide": "",
+    "Ozone": "",
+    "Tropospheric Ozone": "",
+}
+
+LEVEL3_OUTPUT_UNITS_OPTIONS = {
+    "Mole": "mol-per-m2",
+    "Molecule": "molecules-per-cm2",
+}
