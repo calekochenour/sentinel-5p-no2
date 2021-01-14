@@ -2816,6 +2816,215 @@ def plot_spline(
     return fig, ax, cubic_spline
 
 
+def plot_spline_co(
+    time_series,
+    grid_id,
+    spline_start,
+    spline_end,
+    plot_start,
+    plot_end,
+    add_study_area_max=False,
+    add_grid_cell_max=False,
+    data_location="South Korea",
+    data_source="European Space Agency",
+):
+    """Creates a cubic spline plot for aggregated NO2 time series data.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the aggregated NO2 time series data.
+
+    grid_id : str
+        ID for the grid cell to compute the spline for and plot.
+
+    spline_start : str
+        Start date for the spline computation.
+
+    spline_end : str
+        End date for the spline computation.
+
+    plot_start : str
+        Start date for the plot.
+
+    plot_end : str
+        End date for the plot.
+
+    add_study_area_max : bool, optional
+        Boolean to add the study area time series maximum to the figure. This
+        is the maximum aggregated mean over all grid IDs/cells in the study
+        area time series. Default value is False.
+
+    add_grid_cell_max : bool, optional
+        Boolean to add the grid cell time series maximum to the figure. This
+        is the maximum aggregated mean over the single grid ID/cell chosen for
+        the plot. Default value is False.
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Location of the data. Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+        cubic_spline : scipy.interpolate.fitpack2.LSQUnivariateSpline object
+            Spline from the input data.
+
+    Example
+    ------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # SPLINE COMPUTATION
+    # Subset original time series to spline start and end dates
+    time_series_subset_spline = time_series[[grid_id]].loc[
+        spline_start:spline_end
+    ]
+
+    # Get dates and NO2 values into arrays
+    original_dates = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_spline.index,
+        output_dtype="datetime64[ns]",
+    )
+    original_dates_as_float = original_dates.astype("float")
+    original_no2 = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_spline[grid_id]
+    )
+
+    # Set spline weights; fill NO2 NAN values with 0.0
+    spline_weights = ~np.isnan(original_no2)
+    original_no2_filled = np.copy(original_no2)
+    original_no2_filled[~spline_weights] = 0.0
+
+    # Create new dates for spline interpolation (hourly frequency)
+    spline_dates_computation = np.array(
+        pd.date_range(
+            start=original_dates[0], end=original_dates[-1], freq="1H"
+        )
+    )
+    spline_dates_computation_as_float = spline_dates_computation.astype(
+        "float"
+    )
+
+    # Create spline function
+    cubic_spline = UnivariateSpline(
+        x=original_dates_as_float,
+        y=original_no2_filled,
+        w=spline_weights,
+        k=3,
+    )
+
+    # Apply spline function to hourly date frequency
+    spline_no2 = cubic_spline(spline_dates_computation_as_float)
+
+    # PLOTTING
+    # Subset original time series to plot start and end dates
+    time_series_subset_plot = time_series[[grid_id]].loc[plot_start:plot_end]
+
+    # Get arrays for plotting - original data
+    plot_dates = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_plot.index,
+        output_dtype="datetime64[ns]",
+    )
+    plot_no2 = convert_dataframe_column_to_array(
+        dataframe_column=time_series_subset_plot[grid_id]
+    )
+
+    # Create dataframe with spline values
+    spline_subset_plot = pd.DataFrame(
+        data=spline_no2, index=spline_dates_computation, columns=[grid_id]
+    ).loc[plot_start:plot_end]
+
+    # Get arrays for plotting - spline
+    spline_dates_plot = convert_dataframe_column_to_array(
+        dataframe_column=spline_subset_plot.index,
+        output_dtype="datetime64[ns]",
+    )
+    spline_no2_plot = convert_dataframe_column_to_array(
+        dataframe_column=spline_subset_plot[grid_id]
+    )
+
+    # Plot original and spline data
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(20, 10))
+        plt.plot(
+            plot_dates,
+            plot_no2,
+            "ro",
+            markersize=5,
+            color="#ff7f00",
+            label="Mean Aggregated CO",
+        )
+        plt.plot_date(
+            x=spline_dates_plot,
+            y=spline_no2_plot,
+            markersize=2.5,
+            color="#4daf4a",
+            label="Cubic Smoothing Spline",
+        )
+
+        # Add time series maximum values
+        if add_study_area_max:
+            ax.axhline(
+                time_series.stack().max(),
+                color="#e41a1c",
+                label="Study Area Maximum",
+                linewidth=2,
+                zorder=1,
+            )
+
+        if add_grid_cell_max:
+            ax.axhline(
+                time_series[[grid_id]].max()[0],
+                color="#984ea3",  # 377eb8
+                label="Grid ID Maximum",
+                linewidth=2,
+                zorder=1,
+            )
+
+        # Configure axes, legend, caption
+        title_top = f"CO Time Series, {data_location}, Grid {grid_id}"
+        title_middle = (
+            f"Spline Dates: {reformat_date(spline_start)} - "
+            f"{reformat_date(spline_end)}"
+        )
+        title_bottom = (
+            f"Plot Dates:     {reformat_date(plot_start)} - "
+            f"{reformat_date(plot_end)}"
+        )
+        ax.set_title(
+            f"{title_top}\n{title_middle}\n{title_bottom}",
+            fontsize=24,
+        )
+        ax.set_xlabel("Date", fontsize=20)
+        ax.set_ylabel(r"CO ($\mathrm{mol \cdot m^{-2}}$)", fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.legend(
+            shadow=True, edgecolor="white", fontsize=20, loc="upper right"
+        )
+        fig.text(
+            0.5,
+            0.02,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=16,
+        )
+
+    return fig, ax, cubic_spline
+
+
 def reformat_date(date):
     """Reformats a date from YYYY-MM-DD to MM/DD/YYYY.
 
@@ -3333,6 +3542,7 @@ def plot_deltas(
     no2_delta_magnitude,
     no2_delta_percent,
     grid_id,
+    product_type="NO2",
     x_max=30,
     y_min_magnitude=None,
     y_max_magnitude=None,
@@ -3340,7 +3550,7 @@ def plot_deltas(
     y_max_percent=None,
     x_label="Time Delta (hours)",
     y_label_magnitude=r"NO2 Delta ($\mathrm{mol \cdot m^{-2}}$)",
-    y_label_percent=r"NO2 Delta (%)",
+    y_label_percent="NO2 Delta (%)",
     data_location="South Korea",
     data_source="European Space Agency",
 ):
@@ -3424,7 +3634,9 @@ def plot_deltas(
 
         # Configure figure, axes, legend, caption
         # Figure
-        plt.suptitle(f"NO2 Deltas, {data_location}, Grid {grid_id}", size=24)
+        plt.suptitle(
+            f"{product_type} Deltas, {data_location}, Grid {grid_id}", size=24
+        )
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
 
@@ -3524,6 +3736,218 @@ def calculate_time_series_statistics(
     time_series_merged = time_series_gdf.merge(time_series_df, on="GRID_ID")
 
     return time_series_merged
+
+
+def plot_time_series(
+    time_series,
+    grid_id,
+    product_type="NO2",
+    data_location="South Korea",
+    data_source="European Space Agency",
+    add_study_area_max=False,
+):
+    """Plots a time series for an aggregated hexagon grid.
+
+    Parameters
+    ----------
+    time_series : pandas dataframe
+        Dataframe containing the time series data.
+
+    grid_id : str
+        Grid ID to plot.
+
+    product_type : str, optional
+        Sentinel-5P product type. Used for labeling. Default value is 'NO2'.
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Location of the data. Default value is 'European Space Agency'.
+
+    add_study_area_max : bool, optional
+        Boolean to add the study area maximum to the figure. Default value is
+        False.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Compute mean and standard deviation for the grid cell
+    mean = time_series.describe()[[grid_id]].loc["mean"][0]
+    standard_deviation = time_series.describe()[[grid_id]].loc["std"][0]
+
+    # Plot NO2 time series
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(24, 8))
+
+        # Add NO2 data, mean, mean + stddev, mean - stddev, and maximum lines
+        plt.scatter(
+            time_series.index,
+            time_series[[grid_id]],
+            color="#ff7f00",
+            zorder=4,
+        )
+        ax.axhline(
+            mean,
+            color="#4daf4a",
+            label="Grid Cell Mean",
+            linewidth=2,
+        )
+        ax.axhline(
+            mean + standard_deviation,
+            color="#984ea3",
+            label="1 Standard Deviation",
+            linewidth=2,
+        )
+        ax.axhline(
+            mean - standard_deviation,
+            color="#984ea3",
+            linewidth=2,
+        )
+        if add_study_area_max:
+            ax.axhline(
+                time_series.stack().max(),
+                color="#e41a1c",
+                label="Study Area Maximum",
+                linewidth=2,
+            )
+
+        # Configure axes, legend, caption
+        ax.set_title(
+            f"{product_type} Time Series, {data_location}, Hexagon {grid_id}",
+            fontsize=24,
+        )
+        ax.set_xlabel("Date", fontsize=20)
+        units = r"$\mathrm{mol \cdot m^{-2}}$"
+        ax.set_ylabel(f"{product_type} ({units})", fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.legend(
+            shadow=True, edgecolor="white", fontsize=20, loc="upper right"
+        )
+        fig.text(
+            0.5,
+            -0.025,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=20,
+        )
+
+    return fig, ax
+
+
+def plot_normalized_time_series(
+    time_series,
+    grid_id,
+    product_types=["CO", "NO2"],
+    data_location="South Korea",
+    data_source="European Space Agency",
+):
+    """Plots normalized CO and NO2 time series data on the same axis.
+
+    Parameters
+    ----------
+    time_series : list of pandas dataframes
+        List of dataframes containing the time series data.
+
+    grid_id : str
+        Grid ID to plot.
+
+    product_types : list of str, optional
+        Sentinel-5P product type. Used for labeling. Default value is
+        ['Co', 'NO2'].
+
+    data_location : str, optional
+        Location of the data. Default value is 'South Korea'.
+
+    data_source : str, optional
+        Source of the data. Default value is 'European Space Agency'.
+
+    Returns
+    -------
+    tuple
+
+        fig : matplotlib.figure.Figure object
+            The figure object associated with the plot.
+
+        ax : matplotlib.axes._subplots.AxesSubplot object
+            The axes object associated with the plot.
+
+    Example
+    -------
+        >>>
+        >>>
+        >>>
+        >>>
+    """
+    # Plot time series
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(24, 8))
+
+        # Normalize data to grid cell max
+        co_normalized = (
+            time_series[0][[grid_id]]
+            .copy()
+            .divide(time_series[0][[grid_id]].max()[0])
+        )
+
+        no2_normalized = (
+            time_series[1][[grid_id]]
+            .copy()
+            .divide(time_series[1][[grid_id]].max()[0])
+        )
+
+        # Add normalized CO and NO2
+        plt.scatter(
+            co_normalized.index,
+            co_normalized[[grid_id]],
+            color="#4daf4a",
+            zorder=4,
+            label=product_types[0],
+        )
+
+        plt.scatter(
+            no2_normalized.index,
+            no2_normalized[[grid_id]],
+            color="#ff7f00",
+            zorder=4,
+            label=product_types[1],
+        )
+
+        # Configure axes, legend, caption
+        ax.set_title(
+            f"Normalized Time Series, {data_location}, Hexagon {grid_id}",
+            fontsize=24,
+        )
+        ax.set_xlabel("Date", fontsize=20)
+        ax.set_ylabel("Normalized Measurement", fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+        ax.set_ylim(0, 1)
+        ax.legend(shadow=True, edgecolor="white", fontsize=20, loc="best")
+        fig.text(
+            0.5,
+            -0.025,
+            f"Data Source: {data_source}",
+            ha="center",
+            fontsize=20,
+        )
+
+    return fig, ax
 
 
 # -------------------------GLOBAL VARIABLES---------------------------------- #
